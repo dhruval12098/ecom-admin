@@ -1,0 +1,147 @@
+[
+  {
+    "id": 1,
+    "name": "Fruits & Vegetables",
+    "slug": "fruits-vegetables",
+    "subcategories": [
+      {
+        "id": 101,
+        "name": "Fresh Fruits",
+        "slug": "fresh-fruits",
+        "image": "https://i.pinimg.com/736x/d6/87/cd/d687cdf990a1cb53d7478b0512a9e89a.jpg",
+        "productCount": 2,
+        "products": [
+          {
+            "id": 1001,
+            "name": "Organic Apples",
+            "price": 120,
+            "originalPrice": 150,
+            "sku": "APL-001",
+            "discount": "20% Off",
+            "description": "Crisp and juicy organic apples, perfect for snacking or baking.",
+            "rating": 4.8,
+            "reviews": 124,
+            "inStock": true,
+            "weight": "1 kg",
+            "origin": "Local Farms",
+            "imageGallery": [
+              "https://i.pinimg.com/736x/d6/87/cd/d687cdf990a1cb53d7478b0512a9e89a.jpg",
+              "https://i.pinimg.com/1200x/45/63/32/456332c909f732da36000118c44943ab.jpg",
+              "https://i.pinimg.com/736x/34/99/ea/3499ea90731f733af9cb38e59487dfe9.jpg",
+              "https://i.pinimg.com/1200x/00/e2/f8/00e2f8db772843c81c7bf9857ad17461.jpg",
+              "https://i.pinimg.com/736x/2e/dd/04/2edd042cbb5eed1969adcbe9c4f02ee6.jpg",
+              "https://i.pinimg.com/736x/a8/1a/58/a81a58d5ed0008afbdefff9c17e55e60.jpg"
+            ],
+            "shipping": {
+              "type": "free",
+              "cost": 0
+            }
+          },
+          {
+            "id": 1002,
+            "name": "Bananas",
+            "price": 60,
+            "originalPrice": 80,
+            "sku": "BAN-001",
+            "discount": "25% Off",
+            "description": "Fresh yellow bananas, rich in potassium and vitamins.",
+            "rating": 4.6,
+            "reviews": 89,
+            "inStock": true,
+            "weight": "1 dozen",
+            "origin": "Tropical Regions",
+            "imageGallery": [
+              "https://i.pinimg.com/736x/34/99/ea/3499ea90731f733af9cb38e59487dfe9.jpg",
+              "https://i.pinimg.com/1200x/45/63/32/456332c909f732da36000118c44943ab.jpg",
+              "https://i.pinimg.com/736x/d6/87/cd/d687cdf990a1cb53d7478b0512a9e89a.jpg",
+              "https://i.pinimg.com/1200x/00/e2/f8/00e2f8db772843c81c7bf9857ad17461.jpg",
+              "https://i.pinimg.com/736x/2e/dd/04/2edd042cbb5eed1969adcbe9c4f02ee6.jpg",
+              "https://i.pinimg.com/736x/a8/1a/58/a81a58d5ed0008afbdefff9c17e55e60.jpg"
+            ],
+            "shipping": {
+              "type": "basic",
+              "cost": 50
+            }
+          }
+        ]
+      },
+      {
+        "id": 102,
+        "name": "Organic Vegetables",
+        "slug": "organic-vegetables",
+        "image": "https://i.pinimg.com/1200x/00/e2/f8/00e2f8db772843c81c7bf9857ad17461.jpg",
+        "productCount": 1,
+        "products": [
+          {
+            "id": 1003,
+            "name": "Organic Tomatoes",
+            "price": 80,
+            "originalPrice": 100,
+            "sku": "TOM-001",
+            "discount": "20% Off",
+            "description": "Fresh organic tomatoes, perfect for salads and cooking.",
+            "rating": 4.7,
+            "reviews": 156,
+            "inStock": true,
+            "weight": "1 kg",
+            "origin": "Organic Farms",
+            "imageGallery": [
+              "https://i.pinimg.com/1200x/00/e2/f8/00e2f8db772843c81c7bf9857ad17461.jpg",
+              "https://i.pinimg.com/736x/d6/87/cd/d687cdf990a1cb53d7478b0512a9e89a.jpg",
+              "https://i.pinimg.com/736x/34/99/ea/3499ea90731f733af9cb38e59487dfe9.jpg",
+              "https://i.pinimg.com/1200x/45/63/32/456332c909f732da36000118c44943ab.jpg",
+              "https://i.pinimg.com/736x/2e/dd/04/2edd042cbb5eed1969adcbe9c4f02ee6.jpg",
+              "https://i.pinimg.com/736x/a8/1a/58/a81a58d5ed0008afbdefff9c17e55e60.jpg"
+            ],
+            "shipping": {
+              "type": "custom",
+              "cost": 100
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "Dairy & Bakery",
+    "slug": "dairy-bakery",
+    "subcategories": [
+      {
+        "id": 201,
+        "name": "Milk & Cheese",
+        "slug": "milk-cheese",
+        "image": "https://i.pinimg.com/736x/a8/1a/58/a81a58d5ed0008afbdefff9c17e55e60.jpg",
+        "productCount": 1,
+        "products": [
+          {
+            "id": 2001,
+            "name": "Organic Milk",
+            "price": 90,
+            "originalPrice": 100,
+            "sku": "MLK-001",
+            "discount": "10% Off",
+            "description": "Fresh organic milk from grass-fed cows.",
+            "rating": 4.9,
+            "reviews": 203,
+            "inStock": true,
+            "weight": "1 liter",
+            "origin": "Local Dairy",
+            "imageGallery": [
+              "https://i.pinimg.com/736x/a8/1a/58/a81a58d5ed0008afbdefff9c17e55e60.jpg",
+              "https://i.pinimg.com/736x/2e/dd/04/2edd042cbb5eed1969adcbe9c4f02ee6.jpg",
+              "https://i.pinimg.com/1200x/45/63/32/456332c909f732da36000118c44943ab.jpg",
+              "https://i.pinimg.com/736x/34/99/ea/3499ea90731f733af9cb38e59487dfe9.jpg",
+              "https://i.pinimg.com/1200x/00/e2/f8/00e2f8db772843c81c7bf9857ad17461.jpg",
+              "https://i.pinimg.com/736x/d6/87/cd/d687cdf990a1cb53d7478b0512a9e89a.jpg"
+            ],
+            "shipping": {
+              "type": "free",
+              "cost": 0
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

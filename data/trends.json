@@ -1,0 +1,30 @@
+[
+  {
+    "id": 1,
+    "title": "Organic Superfoods",
+    "description": "Nutrient-rich foods trending this season",
+    "image": "https://i.pinimg.com/1200x/45/63/32/456332c909f732da36000118c44943ab.jpg",
+    "badge": "Trending"
+  },
+  {
+    "id": 2,
+    "title": "Local Produce",
+    "description": "Support local farmers with fresh picks",
+    "image": "https://i.pinimg.com/1200x/0d/9d/3b/0d9d3be85fc865122385056f87bf3fb1.jpg",
+    "badge": "Popular"
+  },
+  {
+    "id": 3,
+    "title": "Healthy Snacks",
+    "description": "Guilt-free options for health conscious",
+    "image": "https://i.pinimg.com/736x/be/d2/25/bed22507a3587333adf0260bc55745b5.jpg",
+    "badge": "Trending"
+  },
+  {
+    "id": 4,
+    "title": "Premium Quality",
+    "description": "Best quality products from trusted brands",
+    "image": "https://i.pinimg.com/1200x/68/52/49/68524987b8d1a5d63a2e238c3215d214.jpg",
+    "badge": "Featured"
+  }
+]
