@@ -6,8 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Suspense } from 'react';
-import Loading from './loading';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 
@@ -61,7 +59,6 @@ export default function CustomersPage() {
 
   return (
     <AdminLayout>
-      <Suspense fallback={<Loading />}>
         <div className="space-y-6 text-[13px]">
           {/* Header */}
           <div>
@@ -181,7 +178,6 @@ export default function CustomersPage() {
             </div>
           </div>
         </div>
-      </Suspense>
     </AdminLayout>
   );
 }
