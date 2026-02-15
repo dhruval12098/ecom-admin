@@ -136,8 +136,8 @@ export default function SubcategoryProductsPage() {
                   </div>
 
                   <div className="flex items-baseline gap-2 mt-3">
-                    <span className="text-lg font-bold text-primary">₹{product.price}</span>
-                    <span className="text-sm text-muted-foreground line-through">₹{product.originalPrice}</span>
+                    <span className="text-lg font-bold text-primary">€{product.price}</span>
+                    <span className="text-sm text-muted-foreground line-through">€{product.originalPrice}</span>
                   </div>
 
                   {/* Actions */}

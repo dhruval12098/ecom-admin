@@ -4,17 +4,12 @@ import { useState } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Button } from '@/components/ui/button';
 
-const chartData = [
-  { date: 'Jan 1', orders: 240, revenue: 2400 },
-  { date: 'Jan 2', orders: 321, revenue: 2210 },
-  { date: 'Jan 3', orders: 200, revenue: 2290 },
-  { date: 'Jan 4', orders: 279, revenue: 2000 },
-  { date: 'Jan 5', orders: 200, revenue: 2181 },
-  { date: 'Jan 6', orders: 349, revenue: 2500 },
-  { date: 'Jan 7', orders: 289, revenue: 2100 },
-];
+interface OrdersChartProps {
+  data: { date: string; orders: number; revenue: number }[];
+  isLoading?: boolean;
+}
 
-export function OrdersChart() {
+export function OrdersChart({ data, isLoading }: OrdersChartProps) {
   const [chartType, setChartType] = useState<'line' | 'bar'>('line');
 
   return (
@@ -43,8 +38,10 @@ export function OrdersChart() {
       </div>
 
       <ResponsiveContainer width="100%" height={300}>
-        {chartType === 'line' ? (
-          <LineChart data={chartData}>
+        {isLoading ? (
+          <div className="text-sm text-muted-foreground">Loading chart...</div>
+        ) : chartType === 'line' ? (
+          <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis dataKey="date" stroke="var(--muted-foreground)" />
             <YAxis stroke="var(--muted-foreground)" />
@@ -60,7 +57,7 @@ export function OrdersChart() {
             <Line type="monotone" dataKey="revenue" stroke="#10B981" strokeWidth={2} dot={false} />
           </LineChart>
         ) : (
-          <BarChart data={chartData}>
+          <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis dataKey="date" stroke="var(--muted-foreground)" />
             <YAxis stroke="var(--muted-foreground)" />

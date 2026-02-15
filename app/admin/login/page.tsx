@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [password, setPassword] = React.useState(''); // Declare password and setPassword
   const [isLoading, setIsLoading] = React.useState(false); // Declare isLoading
 
-  const handleSubmit = (e) => { // Declare handleSubmit
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => { // Declare handleSubmit
     e.preventDefault();
     setIsLoading(true);
     // Handle login logic here

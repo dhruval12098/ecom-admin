@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState } from 'react';
 import { AdminLayout } from '@/components/admin/admin-layout';
@@ -17,11 +17,11 @@ export default function AddCollectionPage() {
   const [selectedProducts, setSelectedProducts] = useState<number[]>([]);
 
   const availableProducts = [
-    { id: 1, name: 'Biryani (Chicken)', price: '₹250' },
-    { id: 2, name: 'Paneer Tikka', price: '₹180' },
-    { id: 3, name: 'Butter Chicken', price: '₹220' },
-    { id: 4, name: 'Dosa', price: '₹120' },
-    { id: 6, name: 'Naan Bread', price: '₹50' },
+    { id: 1, name: 'Biryani (Chicken)', price: '€250' },
+    { id: 2, name: 'Paneer Tikka', price: '€180' },
+    { id: 3, name: 'Butter Chicken', price: '€220' },
+    { id: 4, name: 'Dosa', price: '€120' },
+    { id: 6, name: 'Naan Bread', price: '€50' },
   ];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {

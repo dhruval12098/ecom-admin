@@ -1,4 +1,5 @@
-'use client';
+
+﻿'use client';
 
 import React from "react"
 
@@ -6,9 +7,16 @@ import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Upload, Plus, X } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 
 export default function AddProductPage() {
+  const { toast } = useToast();
+  const router = useRouter();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -16,6 +24,7 @@ export default function AddProductPage() {
     discount: '',
     tax: '',
     category: '',
+    subcategory: '',
     stock: '',
     sku: '',
     status: 'active',
@@ -25,6 +34,10 @@ export default function AddProductPage() {
 
   const [imageGallery, setImageGallery] = useState<string[]>([]);
   const [primaryImage, setPrimaryImage] = useState<string>('');
+  const [categories, setCategories] = useState<any[]>([]);
+  const [subcategories, setSubcategories] = useState<any[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
 
   const [variants, setVariants] = useState<Array<{
     id: string;
@@ -42,6 +55,26 @@ export default function AddProductPage() {
     stock: '',
     sku: '',
   });
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/categories`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setCategories(result.data);
+        }
+      } catch (error) {
+        // ignore to keep UI stable
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
+    const category = categories.find((c) => c.slug === formData.category);
+    setSubcategories(category ? category.subcategories || [] : []);
+  }, [categories, formData.category]);
 
   const addImage = () => {
     if (imageGallery.length < 6) {
@@ -82,9 +115,138 @@ export default function AddProductPage() {
     setVariants(variants.filter(v => v.id !== id));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Product data:', { formData, variants });
+    if (!formData.name || !formData.basePrice || !formData.subcategory) {
+      toast({
+        title: 'Error',
+        description: 'Name, price, and subcategory are required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      const slug = formData.name.toLowerCase().replace(/\\s+/g, '-');
+      const price = Number(formData.basePrice);
+      const discount = Number(formData.discount || 0);
+      const response = await fetch(`${API_BASE_URL}/api/products`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subcategoryId: Number(formData.subcategory),
+          name: formData.name,
+          slug,
+          description: formData.description,
+          price,
+          originalPrice: discount > 0 ? price + (price * discount / 100) : null,
+          imageUrl: primaryImage || null,
+          discountPercentage: discount > 0 ? `${discount}% Off` : null,
+          discountColor: discount > 0 ? 'bg-red-500' : null,
+          inStock: Number(formData.stock || 0) > 0,
+          stockQuantity: Number(formData.stock || 0),
+          sku: formData.sku || null,
+          taxPercent: formData.tax ? Number(formData.tax) : null,
+          shippingMethod: formData.shippingType || null,
+          status: formData.status || 'active',
+          weight: null,
+          origin: null
+        })
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Create failed');
+      const productId = result.data.id;
+      for (const url of imageGallery.filter(Boolean)) {
+        const imgRes = await fetch(`${API_BASE_URL}/api/products/${productId}/images`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageUrl: url })
+        });
+        const imgJson = await imgRes.json();
+        if (!imgJson.success) throw new Error(imgJson.error || 'Gallery save failed');
+      }
+      if (formData.hasVariants && variants.length > 0) {
+        for (let i = 0; i < variants.length; i += 1) {
+          const v = variants[i];
+          const varRes = await fetch(`${API_BASE_URL}/api/products/${productId}/variants`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: v.name,
+              type: v.type,
+              price: Number(v.price),
+              stockQuantity: Number(v.stock || 0),
+              sku: v.sku || null,
+              sortOrder: i
+            })
+          });
+          const varJson = await varRes.json();
+          if (!varJson.success) throw new Error(varJson.error || 'Variant save failed');
+        }
+      }
+      toast({
+        title: 'Success',
+        description: 'Product created successfully.',
+      });
+      router.push('/admin/products');
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to create product.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const uploadMainImage = async (file: File) => {
+    setIsUploading(true);
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      formDataUpload.append('fileName', file.name);
+      formDataUpload.append('contentType', file.type);
+      const response = await fetch(`${API_BASE_URL}/api/products/upload-main`, {
+        method: 'POST',
+        body: formDataUpload,
+      });
+      const result = await response.json();
+      if (result.success) {
+        setPrimaryImage(result.data.publicUrl);
+        toast({ title: 'Success', description: 'Main image uploaded.' });
+      } else {
+        throw new Error(result.error || 'Upload failed');
+      }
+    } catch (error) {
+      toast({ title: 'Error', description: 'Main image upload failed.', variant: 'destructive' });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const uploadGalleryImage = async (file: File, index: number) => {
+    setIsUploading(true);
+    setUploadingSlot(index);
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      formDataUpload.append('fileName', file.name);
+      formDataUpload.append('contentType', file.type);
+      const response = await fetch(`${API_BASE_URL}/api/products/upload-gallery`, {
+        method: 'POST',
+        body: formDataUpload,
+      });
+      const result = await response.json();
+      if (result.success) {
+        updateImage(index, result.data.publicUrl);
+        toast({ title: 'Success', description: 'Gallery image uploaded.' });
+      } else {
+        throw new Error(result.error || 'Upload failed');
+      }
+    } catch (error) {
+      toast({ title: 'Error', description: 'Gallery image upload failed.', variant: 'destructive' });
+    } finally {
+      setIsUploading(false);
+      setUploadingSlot(null);
+    }
   };
 
   return (
@@ -108,11 +270,86 @@ export default function AddProductPage() {
           {/* Image Upload */}
           <div className="bg-card border border-border rounded-lg p-6">
             <label className="block text-sm font-semibold text-foreground mb-4">Product Image</label>
-            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:bg-muted/50 transition cursor-pointer">
+            {primaryImage && (
+              <div className="mb-4 w-24 h-24 rounded-lg bg-muted flex items-center justify-center overflow-hidden border">
+                <img
+                  src={primaryImage}
+                  alt="Product"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:bg-muted/50 transition cursor-pointer relative">
               <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-sm font-medium text-foreground">Drag and drop your image here</p>
               <p className="text-xs text-muted-foreground mt-1">or click to select</p>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) uploadMainImage(f);
+                }}
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                disabled={isUploading}
+              />
+              {primaryImage && (
+                <p className="text-xs text-muted-foreground mt-2">Main image selected</p>
+              )}
             </div>
+          </div>
+
+          {/* Gallery Images */}
+          <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-semibold text-foreground">Gallery Images</label>
+              <Button type="button" variant="outline" className="gap-2 bg-transparent" onClick={addImage}>
+                <Plus className="w-4 h-4" />
+                Add Image
+              </Button>
+            </div>
+            {imageGallery.length === 0 && (
+              <p className="text-sm text-muted-foreground">No gallery images yet.</p>
+            )}
+            {imageGallery.map((url, index) => (
+              <div key={index} className="flex items-center gap-3 border border-border rounded-lg p-3">
+                <div className="w-20 h-20 rounded-md border bg-muted flex items-center justify-center overflow-hidden">
+                  {url ? (
+                    <img src={url} alt="Gallery" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">No image</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                    <label className={`inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md shadow-none border border-gray-300 ${uploadingSlot === index ? 'bg-slate-200/70 text-black cursor-not-allowed' : 'bg-slate-200 text-black cursor-pointer'}`}>
+                    {uploadingSlot === index ? 'Uploading...' : url ? 'Replace Image' : 'Choose File'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) uploadGalleryImage(f, index);
+                      }}
+                      className="hidden"
+                      disabled={uploadingSlot === index}
+                    />
+                  </label>
+                  <p className="text-xs text-muted-foreground mt-2">Upload image for slot {index + 1}</p>
+                </div>
+                <ConfirmDialog
+                  title="Remove image?"
+                  description="This will remove the uploaded image from this slot."
+                  confirmText="Remove"
+                  confirmVariant="destructive"
+                  onConfirm={() => removeImage(index)}
+                  trigger={
+                    <Button type="button" variant="outline" className="gap-2 bg-transparent">
+                      <X className="w-4 h-4" />
+                    </Button>
+                  }
+                />
+              </div>
+            ))}
           </div>
 
           {/* Basic Information */}
@@ -154,11 +391,25 @@ export default function AddProductPage() {
                 className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">Select a category</option>
-                <option value="main-course">Main Course</option>
-                <option value="appetizers">Appetizers</option>
-                <option value="bread">Bread</option>
-                <option value="dessert">Dessert</option>
-                <option value="beverages">Beverages</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.slug}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Subcategory</label>
+              <select
+                name="subcategory"
+                value={formData.subcategory}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Select a subcategory</option>
+                {subcategories.map((s: any) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -169,7 +420,7 @@ export default function AddProductPage() {
 
             <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Base Price (₹)</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Base Price (€)</label>
               <input
                 type="number"
                 name="basePrice"
@@ -257,7 +508,7 @@ export default function AddProductPage() {
                 className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="free">Free Shipping</option>
-                <option value="basic">Basic Shipping (₹75-150)</option>
+                <option value="basic">Basic Shipping (€75-150)</option>
                 <option value="custom">Custom Shipping Rate</option>
               </select>
             </div>
@@ -311,7 +562,7 @@ export default function AddProductPage() {
 
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-foreground mb-1">Price (₹)</label>
+                    <label className="block text-xs font-medium text-foreground mb-1">Price (€)</label>
                     <input
                       type="number"
                       value={newVariant.price}
@@ -364,7 +615,7 @@ export default function AddProductPage() {
                         <div className="flex-1">
                           <p className="font-medium text-foreground">{variant.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            ₹{variant.price} • Stock: {variant.stock} • SKU: {variant.sku}
+                            €{variant.price} • Stock: {variant.stock} • SKU: {variant.sku}
                           </p>
                         </div>
                         <button

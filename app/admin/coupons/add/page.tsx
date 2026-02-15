@@ -4,28 +4,68 @@ import React from "react"
 
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CalendarIcon, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 
 export default function AddCouponPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     code: '',
     discountType: 'percentage',
     discountValue: '',
-    expiryDate: '',
     usageLimit: '',
     status: 'active',
   });
+  const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Form data:', formData);
+    if (!formData.code || !formData.discountValue || !expiryDate) return;
+
+    try {
+      setIsSaving(true);
+      const response = await fetch(`${API_BASE_URL}/api/coupons`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: formData.code.trim(),
+          discountType: formData.discountType,
+          discountValue: Number(formData.discountValue),
+          expiryDate: expiryDate.toISOString(),
+          usageLimit: formData.usageLimit ? Number(formData.usageLimit) : null,
+          status: formData.status
+        })
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Create failed');
+      router.push('/admin/coupons');
+    } catch (error) {
+      // keep UI stable on failure
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -66,15 +106,18 @@ export default function AddCouponPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Discount Type</label>
-                <select
-                  name="discountType"
+                <Select
                   value={formData.discountType}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  onValueChange={(value) => setFormData((prev) => ({ ...prev, discountType: value }))}
                 >
-                  <option value="percentage">Percentage (%)</option>
-                  <option value="fixed">Fixed Amount (₹)</option>
-                </select>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentage">Percentage (%)</SelectItem>
+                    <SelectItem value="fixed">Fixed Amount (EUR)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
@@ -93,14 +136,28 @@ export default function AddCouponPage() {
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Expiry Date</label>
-              <input
-                type="date"
-                name="expiryDate"
-                value={formData.expiryDate}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      'w-full justify-start text-left font-normal',
+                      !expiryDate && 'text-muted-foreground'
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {expiryDate ? format(expiryDate, 'PPP') : 'Pick a date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={expiryDate}
+                    onSelect={setExpiryDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div>
@@ -117,21 +174,27 @@ export default function AddCouponPage() {
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Status</label>
-              <select
-                name="status"
+              <Select
                 value={formData.status}
-                onChange={handleChange}
-                className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                onValueChange={(value) => setFormData((prev) => ({ ...prev, status: value }))}
               >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
           {/* Actions */}
           <div className="flex gap-3">
-            <Button type="submit">Create Coupon</Button>
+            <Button type="submit" disabled={isSaving}>
+              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create Coupon
+            </Button>
             <Link href="/admin/coupons">
               <Button variant="outline">Cancel</Button>
             </Link>
@@ -141,3 +204,4 @@ export default function AddCouponPage() {
     </AdminLayout>
   );
 }
+

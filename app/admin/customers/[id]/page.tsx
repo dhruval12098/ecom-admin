@@ -56,9 +56,9 @@ export default function CustomerDetailsPage({ params }: { params: { id: string }
               <h2 className="text-lg font-semibold text-foreground mb-4">Order History</h2>
               <div className="space-y-3">
                 {[
-                  { id: 'ORD-001', date: 'Jan 20, 2024', amount: '₹450', status: 'Delivered' },
-                  { id: 'ORD-002', date: 'Jan 18, 2024', amount: '₹320', status: 'Delivered' },
-                  { id: 'ORD-003', date: 'Jan 15, 2024', amount: '₹580', status: 'Delivered' },
+                  { id: 'ORD-001', date: 'Jan 20, 2024', amount: '€450', status: 'Delivered' },
+                  { id: 'ORD-002', date: 'Jan 18, 2024', amount: '€320', status: 'Delivered' },
+                  { id: 'ORD-003', date: 'Jan 15, 2024', amount: '€580', status: 'Delivered' },
                 ].map((order) => (
                   <div key={order.id} className="flex items-center justify-between pb-3 border-b border-border last:border-b-0">
                     <div>
@@ -89,11 +89,11 @@ export default function CustomerDetailsPage({ params }: { params: { id: string }
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">Total Spent</p>
-                  <p className="text-2xl font-bold text-primary">₹5,240</p>
+                  <p className="text-2xl font-bold text-primary">€5,240</p>
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">Average Order Value</p>
-                  <p className="text-2xl font-bold text-primary">₹436.67</p>
+                  <p className="text-2xl font-bold text-primary">€436.67</p>
                 </div>
               </div>
             </div>

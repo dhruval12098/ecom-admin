@@ -5,14 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Plus, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import categoriesData from '@/data/categories.json';
+import { useToast } from '@/hooks/use-toast';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+
 
 interface Subcategory {
   id: number;
   name: string;
   slug: string;
   image: string;
-  productCount: number;
+  products?: any[];
 }
 
 interface Category {
@@ -24,9 +27,26 @@ interface Category {
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const { toast } = useToast();
 
   useEffect(() => {
-    setCategories(categoriesData as Category[]);
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/categories`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setCategories(result.data);
+        }
+      } catch (error) {
+        toast({
+          title: 'Error',
+          description: 'Failed to load categories.',
+          variant: 'destructive',
+        });
+      }
+    };
+
+    fetchCategories();
   }, []);
 
   return (
@@ -46,17 +66,22 @@ export default function CategoriesPage() {
         </div>
 
         {/* Categories List */}
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {categories.map((category) => (
             <Link key={category.id} href={`/admin/categories/${category.id}`}>
-              <div className="border border-border rounded-lg p-4 bg-card hover:bg-secondary/30 hover:border-primary/50 transition flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-foreground">{category.name}</h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {category.subcategories.length} Subcategories
-                  </p>
+              <div className="border border-slate-200 rounded-lg p-5 bg-white shadow-sm hover:shadow transition-shadow flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="h-10 w-10 rounded-md bg-slate-100 flex items-center justify-center text-slate-600 text-xs font-semibold">
+                    {category.name?.split(' ').map((w: string) => w[0]).slice(0, 2).join('')}
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-slate-900">{category.name}</h2>
+                    <p className="text-sm text-slate-500 mt-1">
+                      {category.subcategories.length} Subcategories
+                    </p>
+                  </div>
                 </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                <ChevronRight className="w-5 h-5 text-slate-400 mt-1" />
               </div>
             </Link>
           ))}

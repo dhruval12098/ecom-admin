@@ -1,108 +1,436 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Plus, Edit, Trash2, ShoppingBag } from 'lucide-react';
-import Link from 'next/link';
-import { useState, useEffect } from 'react';
-import categoriesData from '@/data/categories.json';
-import { useParams } from 'next/navigation';
+import { Card } from '@/components/ui/card';
+import { ArrowLeft, Plus, Upload, X } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
-interface Product {
-  id: number;
-  name: string;
-  price: number;
-  discount: string;
-  image?: string;
-}
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 
-interface Subcategory {
+
+type Subcategory = {
   id: number;
   name: string;
   slug: string;
-  image: string;
-  productCount: number;
-  products?: Product[];
-}
+  image_url?: string;
+  category_id: number;
+};
 
-interface Category {
-  id: number;
-  name: string;
-  slug: string;
-  subcategories: Subcategory[];
-}
-
-export default function CategoryDetailPage() {
+export default function CategoryDetailsPage() {
   const params = useParams();
-  const categoryId = parseInt(params.categoryId as string);
-  
-  const [category, setCategory] = useState<Category | null>(null);
+  const categoryId = params.categoryId as string;
+  const { toast } = useToast();
+  const [categoryName, setCategoryName] = useState('Category');
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
+  const [isAdding, setIsAdding] = useState(false);
+  const [newSub, setNewSub] = useState({ name: '', slug: '', imageUrl: '' });
+  const [isUploading, setIsUploading] = useState(false);
+  const [editingSubId, setEditingSubId] = useState<number | null>(null);
+  const [editSub, setEditSub] = useState({ name: '', slug: '', imageUrl: '' });
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   useEffect(() => {
-    const found = categoriesData.find((cat: Category) => cat.id === categoryId);
-    setCategory(found || null);
-  }, [categoryId]);
+    const fetchData = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/categories`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          const cat = result.data.find((c: any) => String(c.id) === categoryId);
+          if (cat) {
+            setCategoryName(cat.name);
+            setSubcategories(cat.subcategories || []);
+          }
+        }
+      } catch (error) {
+        toast({
+          title: 'Error',
+          description: 'Failed to load category.',
+          variant: 'destructive',
+        });
+      }
+    };
+    if (categoryId) {
+      fetchData();
+    }
+  }, [categoryId, toast]);
 
-  if (!category) {
-    return (
-      <AdminLayout>
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Category not found</p>
-        </div>
-      </AdminLayout>
-    );
-  }
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('fileName', file.name);
+      formData.append('contentType', file.type);
+      const response = await fetch(`${API_BASE_URL}/api/subcategories/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      const result = await response.json();
+      if (result.success) {
+        setNewSub(prev => ({ ...prev, imageUrl: result.data.publicUrl }));
+        toast({
+          title: 'Success',
+          description: 'Image uploaded successfully.',
+        });
+      } else {
+        throw new Error(result.error || 'Upload failed');
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Image upload failed.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleEditImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('fileName', file.name);
+      formData.append('contentType', file.type);
+      const response = await fetch(`${API_BASE_URL}/api/subcategories/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      const result = await response.json();
+      if (result.success) {
+        setEditSub(prev => ({ ...prev, imageUrl: result.data.publicUrl }));
+        toast({
+          title: 'Success',
+          description: 'Image uploaded successfully.',
+        });
+      } else {
+        throw new Error(result.error || 'Upload failed');
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Image upload failed.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleAddSubcategory = async () => {
+    if (!newSub.name.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Subcategory name is required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const slug = newSub.slug || newSub.name.toLowerCase().replace(/\s+/g, '-');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/subcategories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          categoryId: Number(categoryId),
+          name: newSub.name,
+          slug,
+          imageUrl: newSub.imageUrl || null
+        })
+      });
+      const result = await response.json();
+      if (result.success) {
+        setSubcategories(prev => [...prev, result.data]);
+        setNewSub({ name: '', slug: '', imageUrl: '' });
+        setIsAdding(false);
+        toast({
+          title: 'Success',
+          description: 'Subcategory added successfully.',
+        });
+      } else {
+        throw new Error(result.error || 'Create failed');
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to add subcategory.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleEditSubcategory = async () => {
+    if (!editingSubId) return;
+    if (!editSub.name.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Subcategory name is required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const slug = editSub.slug || editSub.name.toLowerCase().replace(/\s+/g, '-');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/subcategories/${editingSubId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          categoryId: Number(categoryId),
+          name: editSub.name,
+          slug,
+          imageUrl: editSub.imageUrl || null,
+        }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        setSubcategories(prev =>
+          prev.map(s =>
+            s.id === editingSubId
+              ? { ...s, name: editSub.name, slug, image_url: editSub.imageUrl || s.image_url }
+              : s
+          )
+        );
+        setEditingSubId(null);
+        setEditSub({ name: '', slug: '', imageUrl: '' });
+        setIsEditOpen(false);
+        toast({
+          title: 'Success',
+          description: 'Subcategory updated successfully.',
+        });
+      } else {
+        throw new Error(result.error || 'Update failed');
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update subcategory.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   return (
     <AdminLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center gap-4">
           <Link href="/admin/categories">
-            <Button variant="outline" size="sm" className="gap-2 bg-transparent">
+            <Button variant="outline" size="icon">
               <ArrowLeft className="w-4 h-4" />
-              Back to Categories
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">{category.name}</h1>
-            <p className="text-muted-foreground mt-1">{category.subcategories.length} Subcategories</p>
+            <h1 className="text-3xl font-semibold text-foreground">{categoryName}</h1>
+            <p className="text-muted-foreground text-sm mt-1">Manage subcategories</p>
+          </div>
+          <div className="ml-auto">
+            <Button className="gap-2" onClick={() => setIsAdding(true)}>
+              <Plus className="w-4 h-4" />
+              Add Subcategory
+            </Button>
           </div>
         </div>
 
-        {/* Subcategories Grid - WITH IMAGES */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {category.subcategories.map((subcat) => (
-            <Link key={subcat.id} href={`/admin/categories/${categoryId}/${subcat.id}`}>
-              <div className="border border-border rounded-lg overflow-hidden bg-card hover:shadow-lg hover:border-primary/50 transition cursor-pointer h-full flex flex-col">
-                {/* Subcategory Image */}
-                <img 
-                  src={subcat.image || "/placeholder.svg"} 
-                  alt={subcat.name}
-                  className="w-full h-48 object-cover"
+        {isAdding && (
+          <Card className="p-6 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Subcategory Name</label>
+              <input
+                type="text"
+                value={newSub.name}
+                onChange={(e) => setNewSub({ ...newSub, name: e.target.value })}
+                className="w-full px-4 py-2 rounded-md bg-background border border-border"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Slug (optional)</label>
+              <input
+                type="text"
+                value={newSub.slug}
+                onChange={(e) => setNewSub({ ...newSub, slug: e.target.value })}
+                className="w-full px-4 py-2 rounded-md bg-background border border-border"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Image</label>
+              <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
+                <Upload className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  disabled={isUploading}
                 />
-                
-                {/* Subcategory Content */}
-                <div className="p-4 flex-1 flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground">{subcat.name}</h3>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                      <ShoppingBag className="w-4 h-4" />
-                      {subcat.productCount} Products
-                    </div>
-                  </div>
+              </div>
+              {newSub.imageUrl && (
+                <div className="mt-3 flex items-center gap-3">
+                  <img
+                    src={newSub.imageUrl}
+                    alt="Subcategory"
+                    className="w-20 h-20 object-cover rounded-md border"
+                  />
+                  <span className="text-xs text-muted-foreground">Preview</span>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleAddSubcategory}>Save</Button>
+              <Button variant="outline" onClick={() => setIsAdding(false)}>Cancel</Button>
+            </div>
+          </Card>
+        )}
 
-                  {/* View Button */}
-                  <Button className="w-full gap-2 bg-primary hover:bg-primary/90 text-primary-foreground mt-4">
-                    <ShoppingBag className="w-4 h-4" />
-                    View Products
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {subcategories.map((sub) => (
+            <Card key={sub.id} className="p-5 border border-slate-200 rounded-lg shadow-sm hover:shadow transition-shadow bg-white">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="h-12 w-12 rounded-md bg-slate-100 overflow-hidden flex items-center justify-center">
+                    {sub.image_url ? (
+                      <img src={sub.image_url} alt={sub.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-xs text-slate-500">No Img</span>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">{sub.name}</div>
+                    <div className="text-xs text-slate-500">{sub.slug}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setEditingSubId(sub.id);
+                      setEditSub({
+                        name: sub.name,
+                        slug: sub.slug,
+                        imageUrl: sub.image_url || '',
+                      });
+                      setIsEditOpen(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="text-destructive hover:text-destructive"
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`${API_BASE_URL}/api/subcategories/${sub.id}`, {
+                          method: 'DELETE',
+                        });
+                        const result = await response.json();
+                        if (!result.success) throw new Error(result.error || 'Delete failed');
+                        setSubcategories(prev => prev.filter(s => s.id !== sub.id));
+                      } catch (error) {
+                        toast({
+                          title: 'Error',
+                          description: 'Failed to delete subcategory.',
+                          variant: 'destructive',
+                        });
+                      }
+                    }}
+                  >
+                    Delete
                   </Button>
                 </div>
               </div>
-            </Link>
+            </Card>
           ))}
+          {subcategories.length === 0 && (
+            <div className="text-muted-foreground text-sm">No subcategories yet.</div>
+          )}
         </div>
       </div>
+      {isEditOpen && editingSubId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl border border-slate-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <div>
+                <div className="text-lg font-semibold text-slate-900">Edit Subcategory</div>
+                <div className="text-xs text-slate-500">Update details for the selected subcategory</div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setIsEditOpen(false);
+                  setEditingSubId(null);
+                }}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-foreground mb-2">Subcategory Name</label>
+                <input
+                  type="text"
+                  value={editSub.name}
+                  onChange={(e) => setEditSub({ ...editSub, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-foreground mb-2">Slug (optional)</label>
+                <input
+                  type="text"
+                  value={editSub.slug}
+                  onChange={(e) => setEditSub({ ...editSub, slug: e.target.value })}
+                  className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-foreground mb-2">Display Image</label>
+                <div className="flex items-center gap-3">
+                  <Button asChild variant="outline" className="gap-2">
+                      <label className="inline-flex items-center justify-center rounded-md bg-slate-200 text-black text-xs font-medium px-3 py-2 shadow-none border border-gray-300 cursor-pointer">
+                        Choose File
+                        <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleEditImageUpload}
+                        disabled={isUploading}
+                        className="sr-only"
+                      />
+                    </label>
+                  </Button>
+                  {editSub.imageUrl ? (
+                    <img
+                      src={editSub.imageUrl}
+                      alt="Subcategory"
+                      className="w-16 h-16 object-cover rounded-md border"
+                    />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">No image</span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsEditOpen(false);
+                  setEditingSubId(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleEditSubcategory}>Save Changes</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }

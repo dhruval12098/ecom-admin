@@ -1,25 +1,20 @@
-'use client';
+﻿'use client';
 
-import Link from 'next/link';
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
 import { Search, Filter, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
-import Loading from './loading';
 
 export default function AuditLogsPage() {
   const [search, setSearch] = useState('');
-  const searchParams = useSearchParams();
 
   const logs = [
     {
       id: 1,
       action: 'Product Updated',
       user: 'Admin User',
-      details: 'Updated price for Butter Chicken from ₹220 to ₹240',
+      details: 'Updated price for Butter Chicken from €220 to €240',
       timestamp: '2024-01-20 2:30 PM',
       type: 'product_update',
     },
@@ -143,8 +138,4 @@ export default function AuditLogsPage() {
       </div>
     </AdminLayout>
   );
-}
-
-export function Loading() {
-  return null;
 }

@@ -5,14 +5,69 @@ import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useEffect, useMemo, useState } from 'react';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+
 
 export default function CouponsPage() {
-  const coupons = [
-    { id: 1, code: 'SAVE10', type: 'Percentage', value: '10%', expiryDate: 'Feb 28, 2024', used: 245, status: 'Active' },
-    { id: 2, code: 'FLAT50', type: 'Fixed', value: '₹50', expiryDate: 'Mar 31, 2024', used: 128, status: 'Active' },
-    { id: 3, code: 'WELCOME20', type: 'Percentage', value: '20%', expiryDate: 'Jan 25, 2024', used: 512, status: 'Active' },
-    { id: 4, code: 'OLDYEAR', type: 'Percentage', value: '15%', expiryDate: 'Jan 15, 2024', used: 0, status: 'Expired' },
-  ];
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchCoupons = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const response = await fetch(`${API_BASE_URL}/api/coupons`);
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || 'Failed to fetch');
+        setCoupons(Array.isArray(result.data) ? result.data : []);
+      } catch (err: any) {
+        setError(err?.message || 'Failed to load coupons');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchCoupons();
+  }, []);
+
+  const handleDelete = async (id: number) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/coupons/${id}`, {
+        method: 'DELETE'
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Delete failed');
+      setCoupons((prev) => prev.filter((c) => c.id !== id));
+    } catch (err) {
+      // keep UI stable on failure
+    }
+  };
+
+  const rows = useMemo(() => {
+    return coupons.map((c) => {
+      const typeLabel = c.discount_type === 'fixed' ? 'Fixed' : 'Percentage';
+      const valueLabel =
+        c.discount_type === 'fixed' ? `EUR ${c.discount_value}` : `${c.discount_value}%`;
+      const expiryLabel = c.expiry_date
+        ? new Date(c.expiry_date).toLocaleDateString()
+        : '-';
+      const usedLabel = c.used_count ?? 0;
+      const statusLabel = c.status ? String(c.status) : 'unknown';
+
+      return {
+        ...c,
+        typeLabel,
+        valueLabel,
+        expiryLabel,
+        usedLabel,
+        statusLabel
+      };
+    });
+  }, [coupons]);
 
   return (
     <AdminLayout>
@@ -47,27 +102,64 @@ export default function CouponsPage() {
                 </tr>
               </thead>
               <tbody>
-                {coupons.map((coupon) => (
+                {isLoading && (
+                  <tr>
+                    <td className="px-6 py-6 text-sm text-muted-foreground" colSpan={7}>
+                      Loading coupons...
+                    </td>
+                  </tr>
+                )}
+                {!isLoading && error && (
+                  <tr>
+                    <td className="px-6 py-6 text-sm text-destructive" colSpan={7}>
+                      {error}
+                    </td>
+                  </tr>
+                )}
+                {!isLoading && !error && rows.length === 0 && (
+                  <tr>
+                    <td className="px-6 py-6 text-sm text-muted-foreground" colSpan={7}>
+                      No coupons found.
+                    </td>
+                  </tr>
+                )}
+                {!isLoading && !error && rows.map((coupon) => (
                   <tr key={coupon.id} className="border-b border-border hover:bg-muted/30 transition">
                     <td className="px-6 py-4 text-sm font-semibold text-foreground">{coupon.code}</td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground">{coupon.type}</td>
-                    <td className="px-6 py-4 text-sm font-semibold text-foreground">{coupon.value}</td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground">{coupon.expiryDate}</td>
-                    <td className="px-6 py-4 text-sm text-foreground">{coupon.used} times</td>
+                    <td className="px-6 py-4 text-sm text-muted-foreground">{coupon.typeLabel}</td>
+                    <td className="px-6 py-4 text-sm font-semibold text-foreground">{coupon.valueLabel}</td>
+                    <td className="px-6 py-4 text-sm text-muted-foreground">{coupon.expiryLabel}</td>
+                    <td className="px-6 py-4 text-sm text-foreground">{coupon.usedLabel} times</td>
                     <td className="px-6 py-4 text-sm">
                       <Badge
                         className={
-                          coupon.status === 'Active'
+                          String(coupon.statusLabel).toLowerCase() === 'active'
                             ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
                             : 'bg-gray-50 text-gray-700 dark:bg-gray-900/20 dark:text-gray-400'
                         }
                       >
-                        {coupon.status}
+                        {String(coupon.statusLabel)}
                       </Badge>
                     </td>
                     <td className="px-6 py-4 text-sm space-x-2">
-                      <button className="text-primary hover:text-primary/80 font-medium">Edit</button>
-                      <button className="text-destructive hover:text-destructive/80 font-medium">Delete</button>
+                      <Link
+                        href={`/admin/coupons/edit/${coupon.id}`}
+                        className="text-primary hover:text-primary/80 font-medium"
+                      >
+                        Edit
+                      </Link>
+                      <ConfirmDialog
+                        title="Delete coupon?"
+                        description="This action cannot be undone."
+                        confirmText="Delete"
+                        confirmVariant="destructive"
+                        onConfirm={() => handleDelete(coupon.id)}
+                        trigger={
+                          <button className="text-destructive hover:text-destructive/80 font-medium">
+                            Delete
+                          </button>
+                        }
+                      />
                     </td>
                   </tr>
                 ))}
@@ -79,3 +171,4 @@ export default function CouponsPage() {
     </AdminLayout>
   );
 }
+

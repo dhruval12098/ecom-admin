@@ -6,15 +6,22 @@ import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Upload, ChevronUp, ChevronDown, GripVertical } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useToast } from '@/hooks/use-toast';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+
 
 export default function EditCategoryPage({ params }: { params: { id: string } }) {
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: 'Main Course',
     status: 'active',
     autoHideIfEmpty: false,
     hideIfOutOfStock: false,
   });
+  const [imageUrl, setImageUrl] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
   const [assignedProducts, setAssignedProducts] = useState<Array<{
     id: number;
@@ -23,14 +30,14 @@ export default function EditCategoryPage({ params }: { params: { id: string } })
     stock: number;
     priority: number;
   }>>([
-    { id: 1, name: 'Biryani (Chicken)', price: '₹250', stock: 45, priority: 1 },
-    { id: 3, name: 'Butter Chicken', price: '₹220', stock: 38, priority: 2 },
+    { id: 1, name: 'Biryani (Chicken)', price: '€250', stock: 45, priority: 1 },
+    { id: 3, name: 'Butter Chicken', price: '€220', stock: 38, priority: 2 },
   ]);
 
   const [unassignedProducts] = useState([
-    { id: 2, name: 'Paneer Tikka', price: '₹180', stock: 62 },
-    { id: 4, name: 'Dosa', price: '₹120', stock: 5 },
-    { id: 5, name: 'Samosas', price: '₹80', stock: 0 },
+    { id: 2, name: 'Paneer Tikka', price: '€180', stock: 62 },
+    { id: 4, name: 'Dosa', price: '€120', stock: 5 },
+    { id: 5, name: 'Samosas', price: '€80', stock: 0 },
   ]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -56,9 +63,99 @@ export default function EditCategoryPage({ params }: { params: { id: string } })
     setAssignedProducts(assignedProducts.filter(p => p.id !== productId).map((p, i) => ({ ...p, priority: i + 1 })));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const fetchCategory = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/categories`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          const found = result.data.find((c: any) => String(c.id) === params.id);
+          if (found) {
+            setFormData((prev) => ({ ...prev, name: found.name || '' }));
+            setImageUrl(found.image || found.image_url || '');
+          }
+        }
+      } catch (error) {
+        toast({
+          title: 'Error',
+          description: 'Failed to load category.',
+          variant: 'destructive',
+        });
+      }
+    };
+    fetchCategory();
+  }, [params.id, toast]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Category data:', { formData, assignedProducts });
+    if (!formData.name.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Category name is required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      const slug = formData.name.toLowerCase().replace(/\s+/g, '-');
+      const response = await fetch(`${API_BASE_URL}/api/categories/${params.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          slug: slug,
+          imageUrl: imageUrl || null
+        })
+      });
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Update failed');
+      }
+      toast({
+        title: 'Success',
+        description: 'Category updated successfully.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update category.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      formDataUpload.append('fileName', file.name);
+      formDataUpload.append('contentType', file.type);
+      const response = await fetch(`${API_BASE_URL}/api/categories/upload`, {
+        method: 'POST',
+        body: formDataUpload,
+      });
+      const result = await response.json();
+      if (result.success) {
+        setImageUrl(result.data.publicUrl);
+        toast({
+          title: 'Success',
+          description: 'Image uploaded successfully.',
+        });
+      } else {
+        throw new Error(result.error || 'Upload failed');
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Image upload failed.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -83,15 +180,26 @@ export default function EditCategoryPage({ params }: { params: { id: string } })
           <div className="bg-card border border-border rounded-lg p-6">
             <label className="block text-sm font-semibold text-foreground mb-4">Category Image</label>
             <div className="mb-4 w-full h-40 rounded-lg bg-muted flex items-center justify-center">
-              <img
-                src="https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&h=300&fit=crop"
-                alt="Category"
-                className="w-full h-full object-cover rounded-lg"
-              />
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt="Category"
+                  className="w-full h-full object-cover rounded-lg"
+                />
+              ) : (
+                <div className="text-sm text-muted-foreground">No image</div>
+              )}
             </div>
             <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:bg-muted/50 transition cursor-pointer">
               <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-sm font-medium text-foreground">Replace image</p>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="mt-3"
+                disabled={isUploading}
+              />
             </div>
           </div>
 

@@ -3,30 +3,88 @@
 import Link from 'next/link';
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, Filter } from 'lucide-react';
-import { useState } from 'react';
+import { Plus, Search } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import Loading from './loading';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+
+
 export default function ProductsPage() {
   const [search, setSearch] = useState('');
-  const searchParams = useSearchParams();
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
-  const products = [
-    { id: 1, name: 'Biryani (Chicken)', price: '₹250', stock: 45, category: 'Main Course', status: 'Active' },
-    { id: 2, name: 'Paneer Tikka', price: '₹180', stock: 62, category: 'Appetizers', status: 'Active' },
-    { id: 3, name: 'Butter Chicken', price: '₹220', stock: 38, category: 'Main Course', status: 'Active' },
-    { id: 4, name: 'Dosa', price: '₹120', stock: 5, category: 'Breakfast', status: 'Low Stock' },
-    { id: 5, name: 'Samosas', price: '₹80', stock: 0, category: 'Appetizers', status: 'Out of Stock' },
-    { id: 6, name: 'Naan Bread', price: '₹50', stock: 120, category: 'Bread', status: 'Active' },
-  ];
+  const [products, setProducts] = useState<any[]>([]);
+  const [subcategoryLookup, setSubcategoryLookup] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/products`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setProducts(result.data);
+        }
+      } catch (error) {
+        // keep UI stable on failure
+      }
+    };
+    fetchProducts();
+  }, []);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/categories`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          const map: Record<string, string> = {};
+          result.data.forEach((cat: any) => {
+            (cat.subcategories || []).forEach((sub: any) => {
+              map[String(sub.id)] = sub.name;
+            });
+          });
+          setSubcategoryLookup(map);
+        }
+      } catch (error) {
+        // ignore
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  const query = search.trim().toLowerCase();
+  const filteredProducts = products.filter((product) => {
+    if (!query) return true;
+    const name = String(product.name || '').toLowerCase();
+    const sku = String(product.sku || '').toLowerCase();
+    const category = String(subcategoryLookup[String(product.subcategory_id)] || '').toLowerCase();
+    const id = String(product.id || '').toLowerCase();
+    return (
+      name.includes(query) ||
+      sku.includes(query) ||
+      category.includes(query) ||
+      id.includes(query)
+    );
+  });
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, products.length]);
+
+  const totalItems = filteredProducts.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const pagedProducts = filteredProducts.slice(startIndex, startIndex + pageSize);
 
   return (
     <AdminLayout>
       <Suspense fallback={<Loading />}>
-        <div className="space-y-6">
+        <div className="space-y-6 text-[13px]">
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
@@ -41,22 +99,18 @@ export default function ProductsPage() {
             </Link>
           </div>
 
-          {/* Filters and Search */}
+          {/* Filter and Search */}
           <div className="flex gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search products..."
+                placeholder="Search by name, SKU, category, or ID..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 rounded-md bg-card border border-border focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
-            <Button variant="outline" className="gap-2 bg-transparent">
-              <Filter className="w-4 h-4" />
-              Filter
-            </Button>
           </div>
 
           {/* Products Table */}
@@ -65,35 +119,32 @@ export default function ProductsPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-foreground">Product Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-foreground">Price</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-foreground">Category</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-foreground">Stock</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-foreground">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-foreground">Actions</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Product Name</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Price</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Category</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Stock</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Status</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {products.map((product) => (
+                  {pagedProducts.map((product) => (
                     <tr key={product.id} className="border-b border-border hover:bg-muted/30 transition">
-                      <td className="px-6 py-4 text-sm font-medium text-foreground">{product.name}</td>
-                      <td className="px-6 py-4 text-sm text-foreground">{product.price}</td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">{product.category}</td>
-                      <td className="px-6 py-4 text-sm text-foreground">{product.stock} units</td>
-                      <td className="px-6 py-4 text-sm">
+                      <td className="px-4 py-2 text-[13px] font-medium text-foreground">{product.name}</td>
+                      <td className="px-4 py-2 text-[13px] text-foreground">€ {product.price}</td>
+                      <td className="px-4 py-2 text-[13px] text-muted-foreground">{subcategoryLookup[String(product.subcategory_id)] || product.subcategory_id}</td>
+                      <td className="px-4 py-2 text-[13px] text-foreground">{product.in_stock ? 'In Stock' : 'Out of Stock'}</td>
+                      <td className="px-4 py-2 text-[13px]">
                         <Badge
                           className={
-                            product.status === 'Active'
-                              ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                              : product.status === 'Low Stock'
-                                ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400'
-                                : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'
+                            product.in_stock ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                              : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'
                           }
                         >
-                          {product.status}
+                          {product.in_stock ? 'Active' : 'Out of Stock'}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 text-sm space-x-2">
+                      <td className="px-4 py-2 text-[13px] space-x-2">
                         <Link
                           href={`/admin/products/edit/${product.id}`}
                           className="text-primary hover:text-primary/80 font-medium"
@@ -106,8 +157,42 @@ export default function ProductsPage() {
                       </td>
                     </tr>
                   ))}
+                  {pagedProducts.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-8 text-center text-[13px] text-muted-foreground">
+                        No products found for "{search}".
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-[12px] text-muted-foreground">
+            <div>
+              Showing {totalItems === 0 ? 0 : startIndex + 1}-{Math.min(startIndex + pageSize, totalItems)} of {totalItems}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Prev
+              </Button>
+              <div className="min-w-[80px] text-center">
+                Page {safePage} of {totalPages}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={safePage === totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </Button>
             </div>
           </div>
         </div>

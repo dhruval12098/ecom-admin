@@ -16,9 +16,12 @@ export function Topbar() {
   const [searchQuery, setSearchQuery] = useState('');
 
   return (
-    <header className="h-16 border-b border-border bg-card fixed right-0 left-60 top-0 flex items-center justify-between px-6 z-40">
+    <header
+      className="h-16 border-b border-border bg-card fixed right-0 top-0 flex items-center justify-between px-6 z-40"
+      style={{ left: '240px' }}
+    >
       {/* Search */}
-      <div className="flex-1 max-w-xs">
+      <div className="flex items-center gap-3 flex-1 max-w-xs">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
