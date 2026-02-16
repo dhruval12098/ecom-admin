@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Upload, Save } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
 
 type HeroSlide = {
@@ -76,6 +77,16 @@ export default function EditHeroSlidePage() {
     const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>, target: 'desktop' | 'mobile') => {
       const file = event.target.files?.[0];
       if (!file) return;
+      if (file.size > MAX_UPLOAD_BYTES) {
+        setError('Max file size is 2 MB.');
+        toast({
+          title: 'File too large',
+          description: 'Please upload an image smaller than 2 MB.',
+          variant: 'destructive',
+        });
+        event.currentTarget.value = '';
+        return;
+      }
     setUploadingTarget(target);
       setError('');
       try {

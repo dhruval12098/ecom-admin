@@ -15,7 +15,7 @@ import {
   Settings,
   BarChart3,
   Truck,
-  Zap,
+  ShoppingBasket,
   Grid,
   Clock,
   Activity,
@@ -32,9 +32,9 @@ const navItems = [
     icon: LayoutDashboard,
   },
   {
-    label: 'Orders',
-    href: '/admin/orders',
-    icon: ShoppingCart,
+    label: 'Categories',
+    href: '/admin/categories',
+    icon: Layers,
   },
   {
     label: 'Products',
@@ -42,9 +42,9 @@ const navItems = [
     icon: Package,
   },
   {
-    label: 'Categories',
-    href: '/admin/categories',
-    icon: Layers,
+    label: 'Orders',
+    href: '/admin/orders',
+    icon: ShoppingCart,
   },
   {
     label: 'Inventory',
@@ -143,10 +143,10 @@ export function Sidebar() {
         <div className="p-4 border-b border-sidebar-border">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded bg-primary flex items-center justify-center">
-              <Zap className="w-5 h-5 text-primary-foreground" />
+              <ShoppingBasket className="w-5 h-5 text-primary-foreground" />
             </div>
             <span className="logo-text font-semibold text-sm">
-              FoodAdmin
+              Tulsi - ADMIN
             </span>
           </div>
         </div>

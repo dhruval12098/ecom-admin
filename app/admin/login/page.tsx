@@ -4,49 +4,66 @@ import React from "react"
 
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Zap } from 'lucide-react'; // Import Zap from lucide-react or any other icon library
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = React.useState(''); // Declare email and setEmail
   const [password, setPassword] = React.useState(''); // Declare password and setPassword
   const [isLoading, setIsLoading] = React.useState(false); // Declare isLoading
+  const [error, setError] = React.useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => { // Declare handleSubmit
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => { // Declare handleSubmit
     e.preventDefault();
     setIsLoading(true);
-    // Handle login logic here
-    setIsLoading(false);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/admin-auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const result = await response.json();
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || 'Invalid credentials');
+      }
+      const token = result?.data?.token;
+      const adminEmail = result?.data?.admin?.email || email;
+      if (!token) throw new Error('Missing token');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('admin_token', token);
+        localStorage.setItem('admin_email', adminEmail);
+      }
+      router.push('/admin/dashboard');
+    } catch (err: any) {
+      setError(err?.message || 'Login failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  useEffect(() => {
-    // Redirect directly to dashboard - login is disabled
-    router.push('/admin/dashboard');
-  }, [router]);
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="w-full max-w-md p-8 space-y-6 bg-card rounded-lg shadow-md">
-        {/* Logo */}
-        <div className="flex items-center gap-2 mb-8">
-          <div className="w-10 h-10 rounded bg-primary flex items-center justify-center">
-            <Zap className="w-6 h-6 text-primary-foreground" />
-          </div>
-          <span className="text-xl font-semibold text-foreground">FoodAdmin</span>
-        </div>
-
-        {/* Heading */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-foreground mb-2">Welcome back</h1>
-          <p className="text-sm text-muted-foreground">
-            Sign in to your admin dashboard to manage your food ordering business.
+    <div className="min-h-screen bg-[#f6f6f6] flex items-center justify-center px-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-black/5 p-8 md:p-10">
+        <div className="text-center mb-8">
+          <p className="text-xs uppercase tracking-[0.3em] text-gray-500 mb-3">Admin Access</p>
+          <h1 className="text-2xl md:text-3xl font-semibold text-gray-900">
+            Tulsi Grocery Ecommerce
+          </h1>
+          <p className="text-sm text-gray-500 mt-2">
+            Sign in to manage orders, products, and store settings.
           </p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </div>
+          )}
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
               Email address
@@ -58,7 +75,7 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="admin@example.com"
               required
-              className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
+              className="w-full px-4 py-3 rounded-xl bg-white border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-black transition"
             />
           </div>
 
@@ -73,7 +90,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
-              className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
+              className="w-full px-4 py-3 rounded-xl bg-white border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-black transition"
             />
           </div>
 
@@ -81,33 +98,28 @@ export default function LoginPage() {
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
-                className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black/20"
               />
               <span className="text-sm text-foreground">Remember me</span>
             </label>
-            <Link
-              href="#"
-              className="text-sm text-primary hover:text-primary/80 transition"
-            >
-              Forgot password?
-            </Link>
           </div>
 
           <Button
             type="submit"
             disabled={isLoading}
-            className="w-full"
+            className="w-full bg-black text-white hover:bg-black/90 rounded-xl h-11"
           >
             {isLoading ? 'Signing in...' : 'Sign in'}
           </Button>
         </form>
 
         {/* Demo info */}
-        <div className="mt-6 p-4 rounded-md bg-muted">
-          <p className="text-xs text-muted-foreground">
-            <strong>Demo credentials:</strong> Use any email and password to login
+        <div className="mt-6 p-4 rounded-xl bg-gray-50 border border-gray-200">
+          <p className="text-xs text-gray-500">
+            Use your admin email and password to continue.
           </p>
         </div>
+
       </div>
     </div>
   );

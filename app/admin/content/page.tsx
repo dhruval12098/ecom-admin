@@ -15,6 +15,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
 
 type TabType = 'hero' | 'about' | 'contact' | 'trends' | 'offer';
@@ -196,6 +197,16 @@ export default function ContentPage() {
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>, target: 'desktop' | 'mobile' = 'desktop') => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setUploadError('Max file size is 2 MB.');
+      toast({
+        title: 'File too large',
+        description: 'Please upload an image smaller than 2 MB.',
+        variant: 'destructive',
+      });
+      event.currentTarget.value = '';
+      return;
+    }
 
     setIsUploading(true);
     setUploadError('');
@@ -377,6 +388,16 @@ export default function ContentPage() {
   const handleTrendImageUpload = async (event: React.ChangeEvent<HTMLInputElement>, trendId: number | 'new') => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setTrendUploadError('Max file size is 2 MB.');
+      toast({
+        title: 'File too large',
+        description: 'Please upload an image smaller than 2 MB.',
+        variant: 'destructive',
+      });
+      event.currentTarget.value = '';
+      return;
+    }
 
     setUploadingTrendId(trendId);
     setTrendUploadError('');

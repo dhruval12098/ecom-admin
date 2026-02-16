@@ -2,6 +2,7 @@
 
 import React, { Suspense, useEffect, useState } from "react"
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 
 import { Providers } from '@/app/providers';
 
@@ -17,12 +18,39 @@ const Topbar = dynamic(() => import('./topbar').then((mod) => mod.Topbar), {
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  if (!mounted) {
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (typeof window === 'undefined') return;
+      const token = localStorage.getItem('admin_token');
+      if (!token) {
+        router.replace('/admin/login');
+        return;
+      }
+      try {
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+        const res = await fetch(`${API_BASE_URL}/api/admin-auth/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error('Unauthorized');
+        setAuthChecked(true);
+      } catch (e) {
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_email');
+        router.replace('/admin/login');
+      }
+    };
+
+    checkAuth();
+  }, [router]);
+
+  if (!mounted || !authChecked) {
     return (
       <div className="admin-shell-loading" aria-hidden="true">
         <div className="admin-sidebar-skeleton" />

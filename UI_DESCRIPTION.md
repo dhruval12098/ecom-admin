@@ -34,7 +34,7 @@ A professional, ultra-clean Food Ordering Admin Dashboard built with Next.js, Re
 ## Layout Structure
 
 ### Sidebar Navigation (Fixed, 260px width)
-- **Logo**: FoodHub with icon
+- **Logo**: Tulsi Indian Grocery Store with icon
 - **Navigation Items** (12 sections):
   - Dashboard
   - Orders
@@ -72,7 +72,7 @@ A professional, ultra-clean Food Ordering Admin Dashboard built with Next.js, Re
 
 **UI Components**:
 - Centered card layout with subtle shadow
-- FoodHub logo and branding at top
+- Tulsi Indian Grocery Store logo and branding at top
 - Welcome heading with description
 - Email input field with placeholder
 - Password input field with placeholder

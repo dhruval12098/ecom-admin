@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
 export default function AddProductPage() {
   const { toast } = useToast();
@@ -198,6 +199,10 @@ export default function AddProductPage() {
   };
 
   const uploadMainImage = async (file: File) => {
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast({ title: 'File too large', description: 'Please upload an image smaller than 2 MB.', variant: 'destructive' });
+      return;
+    }
     setIsUploading(true);
     try {
       const formDataUpload = new FormData();
@@ -223,6 +228,10 @@ export default function AddProductPage() {
   };
 
   const uploadGalleryImage = async (file: File, index: number) => {
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast({ title: 'File too large', description: 'Please upload an image smaller than 2 MB.', variant: 'destructive' });
+      return;
+    }
     setIsUploading(true);
     setUploadingSlot(index);
     try {

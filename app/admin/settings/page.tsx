@@ -9,17 +9,19 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Building2, Upload, ShieldCheck, Truck, Receipt, Mail, Phone } from 'lucide-react';
+import { Building2, Upload, Truck, Receipt, Mail, Phone, Pencil, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
 
-  const initialForm = {
-    storeName: 'FoodHub',
-    storeEmail: 'contact@foodhub.com',
+    const initialForm = {
+      storeName: 'Tulsi Indian Grocery Store',
+      storeEmail: 'contact@tulsiindiangrocerystore.com',
     phone: '+91 98765 43210',
-    supportEmail: 'support@foodhub.com',
+      supportEmail: 'support@tulsiindiangrocerystore.com',
     address: '221B Baker Street, London',
     smtpEmail: '',
     smtpPassword: '',
@@ -36,12 +38,23 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3
 
 export default function SettingsPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [form, setForm] = useState(initialForm);
   const [initialValues, setInitialValues] = useState(initialForm);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditingStoreInfo, setIsEditingStoreInfo] = useState(false);
   const [isEditingEmailConfig, setIsEditingEmailConfig] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [adminEmail, setAdminEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [showAdminDialog, setShowAdminDialog] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [emailDraft, setEmailDraft] = useState({
     smtpEmail: initialForm.smtpEmail,
     smtpPassword: initialForm.smtpPassword,
@@ -116,6 +129,13 @@ export default function SettingsPage() {
     fetchSettings();
   }, [toast]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = localStorage.getItem('admin_email') || '';
+    setAdminEmail(stored);
+    setNewEmail(stored);
+  }, []);
+
   const handleSave = async (nextForm = form) => {
     try {
       const payload = {
@@ -178,6 +198,62 @@ export default function SettingsPage() {
     if (ok) setIsEditingEmailConfig(false);
   };
 
+  const handlePasswordUpdate = async () => {
+    if (!currentPassword || !newPassword || !newEmail) {
+      toast({
+        title: 'Missing fields',
+        description: 'Please enter current password, new email, and new password.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: 'Passwords do not match',
+        description: 'New password and confirmation must match.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    try {
+      setIsUpdatingPassword(true);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : '';
+      if (!token) throw new Error('Not authenticated');
+      const response = await fetch(`${API_BASE_URL}/api/admin-auth/change-credentials`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ currentPassword, newEmail, newPassword })
+      });
+      const result = await response.json();
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || 'Failed to update password');
+      }
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      toast({
+        title: 'Credentials updated',
+        description: 'Please sign in again with your new email and password.'
+      });
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_email');
+      }
+      router.replace('/admin/login');
+    } catch (error: any) {
+      toast({
+        title: 'Update failed',
+        description: error?.message || 'Please try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
   const handleReset = () => {
     setForm(initialValues);
     toast({
@@ -189,6 +265,15 @@ export default function SettingsPage() {
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast({
+        title: 'File too large',
+        description: 'Please upload an image smaller than 2 MB.',
+        variant: 'destructive'
+      });
+      event.currentTarget.value = '';
+      return;
+    }
     setIsUploadingLogo(true);
     try {
       const formData = new FormData();
@@ -281,7 +366,7 @@ export default function SettingsPage() {
                     <Input
                       value={form.storeName ?? ''}
                       onChange={(e) => handleChange('storeName', e.target.value)}
-                      placeholder="FoodHub"
+                        placeholder="Tulsi Indian Grocery Store"
                       disabled={isLoading || !isEditingStoreInfo}
                     />
                   </div>
@@ -293,7 +378,7 @@ export default function SettingsPage() {
                         value={form.storeEmail ?? ''}
                         onChange={(e) => handleChange('storeEmail', e.target.value)}
                         type="email"
-                        placeholder="contact@foodhub.com"
+                          placeholder="contact@tulsiindiangrocerystore.com"
                         className="pl-9"
                         disabled={isLoading || !isEditingStoreInfo}
                       />
@@ -305,7 +390,7 @@ export default function SettingsPage() {
                       value={form.supportEmail ?? ''}
                       onChange={(e) => handleChange('supportEmail', e.target.value)}
                       type="email"
-                      placeholder="support@foodhub.com"
+                      placeholder="support@tulsiindiangrocerystore.com"
                       disabled={isLoading || !isEditingStoreInfo}
                     />
                   </div>
@@ -453,12 +538,12 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-start justify-between gap-4">
-                <div>
-                  <CardTitle>Email Configuration</CardTitle>
-                  <CardDescription>SMTP settings used to send transactional emails.</CardDescription>
-                </div>
+              <Card>
+                <CardHeader className="flex flex-row items-start justify-between gap-4">
+                  <div>
+                    <CardTitle>Email Configuration</CardTitle>
+                    <CardDescription>SMTP settings used to send transactional emails.</CardDescription>
+                  </div>
                 <Button
                   variant="outline"
                   onClick={() => {
@@ -493,11 +578,34 @@ export default function SettingsPage() {
                   <span>SSL/TLS</span>
                   <span className="text-foreground">{form.smtpSecure ? 'Enabled' : 'Disabled'}</span>
                 </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-start justify-between gap-4">
+                  <div>
+                    <CardTitle>Admin Access</CardTitle>
+                    <CardDescription>Admin email and password are hidden.</CardDescription>
+                  </div>
+                  <Button variant="outline" onClick={() => setShowAdminDialog(true)} disabled={isLoading}>
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Edit
+                  </Button>
+                </CardHeader>
+                <CardContent className="text-sm text-muted-foreground">
+                  <div className="flex items-center justify-between">
+                    <span>Admin Email</span>
+                    <span className="text-foreground">••••••••</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-2">
+                    <span>Password</span>
+                    <span className="text-foreground">••••••••</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        </div>
-        <Dialog open={isEditingEmailConfig} onOpenChange={setIsEditingEmailConfig}>
+      <Dialog open={isEditingEmailConfig} onOpenChange={setIsEditingEmailConfig}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Edit Email Configuration</DialogTitle>
@@ -561,7 +669,94 @@ export default function SettingsPage() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+      </Dialog>
+
+      <Dialog open={showAdminDialog} onOpenChange={setShowAdminDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Admin Credentials</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Current Password</label>
+              <div className="relative">
+                <Input
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">New Admin Email</label>
+              <Input
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="admin@example.com"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">New Password</label>
+              <div className="relative">
+                <Input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Confirm New Password</label>
+              <div className="relative">
+                <Input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAdminDialog(false)} disabled={isUpdatingPassword}>
+              Cancel
+            </Button>
+            <Button onClick={handlePasswordUpdate} disabled={isUpdatingPassword}>
+              {isUpdatingPassword ? 'Updating...' : 'Update & Sign Out'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       </div>
     </AdminLayout>
   );

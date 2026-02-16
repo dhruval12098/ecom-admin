@@ -13,6 +13,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import Link from 'next/link';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
 
 export default function OurStoryPage() {
@@ -63,6 +64,16 @@ export default function OurStoryPage() {
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setUploadError('Max file size is 2 MB.');
+      toast({
+        title: "File too large",
+        description: "Please upload an image smaller than 2 MB.",
+        variant: "destructive",
+      });
+      event.currentTarget.value = '';
+      return;
+    }
 
     setIsUploading(true);
     setUploadError('');
@@ -281,4 +292,3 @@ export default function OurStoryPage() {
     </AdminLayout>
   );
 }
-

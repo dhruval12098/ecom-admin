@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
 
 export default function AddCategoryPage() {
@@ -67,6 +68,15 @@ export default function AddCategoryPage() {
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast({
+        title: 'File too large',
+        description: 'Please upload an image smaller than 2 MB.',
+        variant: 'destructive',
+      });
+      event.currentTarget.value = '';
+      return;
+    }
     setIsUploading(true);
     try {
       const formDataUpload = new FormData();
