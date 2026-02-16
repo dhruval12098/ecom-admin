@@ -123,7 +123,7 @@ export default function ProductsPage() {
                     <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Price</th>
                     <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Category</th>
                     <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Stock</th>
-                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Status</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Shipping</th>
                     <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Actions</th>
                   </tr>
                 </thead>
@@ -137,11 +137,12 @@ export default function ProductsPage() {
                       <td className="px-4 py-2 text-[13px]">
                         <Badge
                           className={
-                            product.in_stock ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                              : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'
+                            String(product.shipping_method || '').toLowerCase() === 'free'
+                              ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                              : 'bg-slate-100 text-slate-700 dark:bg-slate-900/20 dark:text-slate-300'
                           }
                         >
-                          {product.in_stock ? 'Active' : 'Out of Stock'}
+                          {String(product.shipping_method || '').toLowerCase() === 'free' ? 'Free' : 'Standard'}
                         </Badge>
                       </td>
                       <td className="px-4 py-2 text-[13px] space-x-2">

@@ -5,6 +5,7 @@ import React from "react"
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { ArrowLeft, Upload, Plus, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
@@ -112,7 +113,7 @@ export default function EditProductPage() {
             sku: prod.sku || '',
             tax: prod.tax_percent ? String(prod.tax_percent) : '',
             status: prod.status || 'active',
-            shippingType: prod.shipping_method || 'free',
+            shippingType: prod.shipping_method || 'standard',
           }));
           setLoadedSubcategoryId(subcategoryId || null);
           setPrimaryImage(prod.image_url || '');
@@ -561,20 +562,21 @@ export default function EditProductPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Shipping Method</label>
-                  <Select
-                    value={formData.shippingType}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, shippingType: value }))}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select shipping" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="free">Free Shipping</SelectItem>
-                      <SelectItem value="basic">Basic Shipping (€75-150)</SelectItem>
-                      <SelectItem value="custom">Custom Shipping Rate</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Shipping</label>
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3">
+                    <div>
+                      <div className="text-sm font-medium text-foreground">Free shipping for this product</div>
+                      <div className="text-xs text-muted-foreground">
+                        If off, global shipping rules from the Shipping page apply.
+                      </div>
+                    </div>
+                    <Switch
+                      checked={formData.shippingType === 'free'}
+                      onCheckedChange={(checked) =>
+                        setFormData((prev) => ({ ...prev, shippingType: checked ? 'free' : 'standard' }))
+                      }
+                    />
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -887,6 +889,8 @@ export default function EditProductPage() {
     </AdminLayout>
   );
 }
+
+
 
 
 

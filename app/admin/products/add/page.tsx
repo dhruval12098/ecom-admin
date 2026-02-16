@@ -5,6 +5,7 @@ import React from "react"
 
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { ArrowLeft, Upload, Plus, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
@@ -509,17 +510,21 @@ export default function AddProductPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Shipping Method</label>
-              <select
-                name="shippingType"
-                value={formData.shippingType}
-                onChange={handleChange}
-                className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="free">Free Shipping</option>
-                <option value="basic">Basic Shipping (€75-150)</option>
-                <option value="custom">Custom Shipping Rate</option>
-              </select>
+              <label className="block text-sm font-medium text-foreground mb-2">Shipping</label>
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3">
+                <div>
+                  <div className="text-sm font-medium text-foreground">Free shipping for this product</div>
+                  <div className="text-xs text-muted-foreground">
+                    If off, global shipping rules from the Shipping page apply.
+                  </div>
+                </div>
+                <Switch
+                  checked={formData.shippingType === 'free'}
+                  onCheckedChange={(checked) =>
+                    setFormData((prev) => ({ ...prev, shippingType: checked ? 'free' : 'standard' }))
+                  }
+                />
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -654,3 +659,5 @@ export default function AddProductPage() {
     </AdminLayout>
   );
 }
+
+

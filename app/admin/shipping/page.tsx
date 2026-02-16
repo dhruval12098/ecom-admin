@@ -55,7 +55,7 @@ export default function ShippingPage() {
 
   const deliveryZones = useMemo(() => {
     return shippingRates
-      .filter((rate) => rate.type === 'basic' || rate.type === 'custom')
+      .filter((rate) => rate.type === 'basic')
       .map((rate) => ({
         id: rate.id,
         zone: rate.zone || rate.name,
@@ -65,8 +65,21 @@ export default function ShippingPage() {
       }));
   }, [shippingRates]);
 
+  const hasBasicRate = useMemo(
+    () => shippingRates.some((rate) => rate.type === 'basic'),
+    [shippingRates]
+  );
+  const hasFreeRate = useMemo(
+    () => shippingRates.some((rate) => rate.type === 'free'),
+    [shippingRates]
+  );
+  const canAddRate = !hasBasicRate || !hasFreeRate;
+
   const openCreate = () => {
-    setDraft({ ...emptyRate });
+    setDraft({
+      ...emptyRate,
+      type: hasBasicRate && !hasFreeRate ? 'free' : 'basic'
+    });
     setDialogOpen(true);
   };
 
@@ -130,13 +143,18 @@ export default function ShippingPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-foreground">Shipping Rates</h2>
-              <p className="text-sm text-muted-foreground">Add, edit, and activate rules used at checkout.</p>
+              <p className="text-sm text-muted-foreground">Add and manage one standard rate plus one conditional free rate.</p>
             </div>
             <div className="flex items-center gap-3">
               {saveMessage && <span className="text-sm text-muted-foreground">{saveMessage}</span>}
+              {!canAddRate && (
+                <span className="text-xs text-muted-foreground">You already have both rates.</span>
+              )}
               <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button className="bg-primary" onClick={openCreate}>Add Shipping Rate</Button>
+                  <Button className="bg-primary" onClick={openCreate} disabled={!canAddRate}>
+                    Add Shipping Rate
+                  </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-2xl">
                   <DialogHeader>
@@ -156,9 +174,8 @@ export default function ShippingPage() {
                           <SelectValue placeholder="Select type" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="free">free</SelectItem>
-                          <SelectItem value="basic">basic</SelectItem>
-                          <SelectItem value="custom">custom</SelectItem>
+                          <SelectItem value="basic">standard</SelectItem>
+                          <SelectItem value="free">conditional free</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -175,12 +192,12 @@ export default function ShippingPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Min Order</Label>
+                      <Label>Min Order (€)</Label>
                       <Input type="number" value={draft.min_order ?? ''} onChange={(e) => setDraft({ ...draft, min_order: e.target.value === '' ? null : Number(e.target.value) })} />
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Max Order</Label>
+                      <Label>Max Order (€)</Label>
                       <Input type="number" value={draft.max_order ?? ''} onChange={(e) => setDraft({ ...draft, max_order: e.target.value === '' ? null : Number(e.target.value) })} />
                     </div>
 
@@ -205,7 +222,7 @@ export default function ShippingPage() {
           </div>
           <Separator />
           <p className="text-sm text-muted-foreground">
-            Free shipping rules are evaluated first, then basic, then custom.
+            Free shipping (conditional) is evaluated first, then standard rate applies.
           </p>
         </Card>
 
@@ -229,10 +246,10 @@ export default function ShippingPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {shippingRates.map((rate) => (
+                {shippingRates.filter((rate) => rate.type === 'basic' || rate.type === 'free').map((rate) => (
                   <TableRow key={rate.id}>
                     <TableCell className="font-medium">{rate.name}</TableCell>
-                    <TableCell>{rate.type}</TableCell>
+                    <TableCell>{rate.type === 'basic' ? 'standard' : 'conditional free'}</TableCell>
                     <TableCell>{formatCurrency(Number(rate.price || 0))}</TableCell>
                     <TableCell>{rate.min_order ?? '-'}</TableCell>
                     <TableCell>{rate.max_order ?? '-'}</TableCell>
@@ -251,19 +268,9 @@ export default function ShippingPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="p-4 border-2">
-            <h3 className="font-semibold text-foreground mb-2">Basic Shipping Zones</h3>
+            <h3 className="font-semibold text-foreground mb-2">Standard Shipping Zones</h3>
             <div className="text-sm text-muted-foreground space-y-1">
               {deliveryZones.filter((z) => z.type === 'basic').map((z) => (
-                <div key={z.id}>
-                  {z.zone} - {formatCurrency(Number(z.charge || 0))} ({z.estimatedDays})
-                </div>
-              ))}
-            </div>
-          </Card>
-          <Card className="p-4 border-2">
-            <h3 className="font-semibold text-foreground mb-2">Custom Shipping Zones</h3>
-            <div className="text-sm text-muted-foreground space-y-1">
-              {deliveryZones.filter((z) => z.type === 'custom').map((z) => (
                 <div key={z.id}>
                   {z.zone} - {formatCurrency(Number(z.charge || 0))} ({z.estimatedDays})
                 </div>
