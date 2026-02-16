@@ -23,6 +23,7 @@ export default function OrderDetailsPage() {
   const [pendingStatus, setPendingStatus] = useState('Pending');
   const [isSavingStatus, setIsSavingStatus] = useState(false);
   const [isDownloadingInvoice, setIsDownloadingInvoice] = useState(false);
+  const [downloadSeconds, setDownloadSeconds] = useState(0);
   const statusTone: Record<string, string> = {
     Pending: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
     Confirmed: 'bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300',
@@ -58,6 +59,11 @@ export default function OrderDetailsPage() {
     if (!orderId) return;
     try {
       setIsDownloadingInvoice(true);
+      setDownloadSeconds(0);
+      const startedAt = Date.now();
+      const intervalId = window.setInterval(() => {
+        setDownloadSeconds(Math.floor((Date.now() - startedAt) / 1000));
+      }, 1000);
       const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}/invoice`);
       if (!response.ok) {
         throw new Error('Failed to download invoice');
@@ -76,9 +82,11 @@ export default function OrderDetailsPage() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      window.clearInterval(intervalId);
     } catch (err) {
       // keep UI stable if download fails
     } finally {
+      setDownloadSeconds(0);
       setIsDownloadingInvoice(false);
     }
   };
@@ -110,7 +118,9 @@ export default function OrderDetailsPage() {
             <div className="flex flex-wrap gap-3">
               <Button className="gap-2" onClick={handleDownloadInvoice} disabled={isDownloadingInvoice}>
                 <Download className="w-4 h-4" />
-                {isDownloadingInvoice ? 'Downloading...' : 'Download Invoice'}
+                {isDownloadingInvoice
+                  ? `Downloading${downloadSeconds > 0 ? ` (${downloadSeconds}s)` : '...'}`
+                  : 'Download Invoice'}
               </Button>
             </div>
         </div>
