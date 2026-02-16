@@ -316,6 +316,12 @@ export default function OrderDetailsPage() {
                   <span className="text-foreground">Delivery Charges</span>
                   <span className="font-semibold text-foreground">{formatCurrency(order?.shipping_fee || 0)}</span>
                 </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-foreground">Coupon</span>
+                  <span className="font-semibold text-foreground">
+                    {order?.coupon_code ? String(order.coupon_code).toUpperCase() : 'None'}
+                  </span>
+                </div>
                 <div className="border-t border-border pt-3">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-foreground">Total Amount</span>
