@@ -140,9 +140,6 @@ export default function CustomersPage() {
                         >
                           View
                         </Link>
-                        <button className={`font-medium ${customer.status === 'Active' ? 'text-destructive hover:text-destructive/80' : 'text-primary hover:text-primary/80'}`}>
-                          {customer.status === 'Active' ? 'Block' : 'Unblock'}
-                        </button>
                       </td>
                     </tr>
                   ))}

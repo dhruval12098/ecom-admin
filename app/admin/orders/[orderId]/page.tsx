@@ -329,9 +329,19 @@ export default function OrderDetailsPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-foreground">Coupon</span>
                   <span className="font-semibold text-foreground">
-                    {order?.coupon_code ? String(order.coupon_code).toUpperCase() : 'None'}
+                    {order?.coupon_code || order?.couponCode
+                      ? String(order?.coupon_code || order?.couponCode).toUpperCase()
+                      : 'None'}
                   </span>
                 </div>
+                {Number(order?.discount_amount || order?.discountAmount || 0) > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-foreground">Discount</span>
+                    <span className="font-semibold text-foreground">
+                      -{formatCurrency(Number(order?.discount_amount || order?.discountAmount || 0))}
+                    </span>
+                  </div>
+                )}
                 <div className="border-t border-border pt-3">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-foreground">Total Amount</span>
