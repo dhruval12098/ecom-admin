@@ -6,19 +6,27 @@ import Link from 'next/link';
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ArrowLeft, Plus, Upload, X } from 'lucide-react';
+import { ArrowLeft, Plus, Upload, X, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
 
+type Product = {
+  id: number;
+  name: string;
+  slug: string;
+};
+
 type Subcategory = {
   id: number;
   name: string;
   slug: string;
+  image?: string;
   image_url?: string;
   category_id: number;
+  products?: Product[];
 };
 
 export default function CategoryDetailsPage() {
@@ -33,6 +41,9 @@ export default function CategoryDetailsPage() {
   const [editingSubId, setEditingSubId] = useState<number | null>(null);
   const [editSub, setEditSub] = useState({ name: '', slug: '', imageUrl: '' });
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Subcategory | null>(null);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -43,7 +54,11 @@ export default function CategoryDetailsPage() {
           const cat = result.data.find((c: any) => String(c.id) === categoryId);
           if (cat) {
             setCategoryName(cat.name);
-            setSubcategories(cat.subcategories || []);
+            const normalized = (cat.subcategories || []).map((sub: any) => ({
+              ...sub,
+              image_url: sub.image_url || sub.image || null
+            }));
+            setSubcategories(normalized);
           }
         }
       } catch (error) {
@@ -237,6 +252,42 @@ export default function CategoryDetailsPage() {
     }
   };
 
+  const openDeleteModal = (sub: Subcategory) => {
+    setDeleteTarget(sub);
+    setIsDeleteOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    setIsDeleteOpen(false);
+    setDeleteTarget(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/subcategories/${deleteTarget.id}`, {
+        method: 'DELETE',
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Delete failed');
+      setSubcategories(prev => prev.filter(s => s.id !== deleteTarget.id));
+      closeDeleteModal();
+      toast({
+        title: 'Deleted',
+        description: 'Subcategory removed successfully.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete subcategory.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -342,22 +393,7 @@ export default function CategoryDetailsPage() {
                   <Button
                     variant="outline"
                     className="text-destructive hover:text-destructive"
-                    onClick={async () => {
-                      try {
-                        const response = await fetch(`${API_BASE_URL}/api/subcategories/${sub.id}`, {
-                          method: 'DELETE',
-                        });
-                        const result = await response.json();
-                        if (!result.success) throw new Error(result.error || 'Delete failed');
-                        setSubcategories(prev => prev.filter(s => s.id !== sub.id));
-                      } catch (error) {
-                        toast({
-                          title: 'Error',
-                          description: 'Failed to delete subcategory.',
-                          variant: 'destructive',
-                        });
-                      }
-                    }}
+                    onClick={() => openDeleteModal(sub)}
                   >
                     Delete
                   </Button>
@@ -446,6 +482,57 @@ export default function CategoryDetailsPage() {
                 Cancel
               </Button>
               <Button onClick={handleEditSubcategory}>Save Changes</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isDeleteOpen && deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-xl rounded-xl bg-white shadow-xl border border-slate-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-500" />
+                <div>
+                  <div className="text-lg font-semibold text-slate-900">Delete Subcategory</div>
+                  <div className="text-xs text-slate-500">This action cannot be undone.</div>
+                </div>
+              </div>
+              <Button variant="ghost" size="icon" onClick={closeDeleteModal}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              <div className="text-sm text-slate-700">
+                Deleting <span className="font-semibold">{deleteTarget.name}</span> will also delete the products listed below.
+              </div>
+              <div className="border border-slate-200 rounded-lg max-h-56 overflow-auto">
+                {deleteTarget.products && deleteTarget.products.length > 0 ? (
+                  <ul className="divide-y divide-slate-100">
+                    {deleteTarget.products.map((product) => (
+                      <li key={product.id} className="px-4 py-2 text-sm text-slate-700">
+                        {product.name}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="px-4 py-3 text-sm text-slate-500">No products found in this subcategory.</div>
+                )}
+              </div>
+              <div className="text-xs text-slate-500">
+                If you want to keep these products, move them to another subcategory before deleting.
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 flex gap-2 justify-end">
+              <Button variant="outline" onClick={closeDeleteModal} disabled={isDeleting}>
+                Cancel
+              </Button>
+              <Button
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={confirmDelete}
+                disabled={isDeleting}
+              >
+                Delete Subcategory
+              </Button>
             </div>
           </div>
         </div>

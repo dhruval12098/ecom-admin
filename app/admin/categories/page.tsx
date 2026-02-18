@@ -2,7 +2,7 @@
 
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
-import { Plus, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Check, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
@@ -22,11 +22,17 @@ interface Category {
   id: number;
   name: string;
   slug: string;
+  description?: string | null;
+  image?: string | null;
+  sort_order?: number | null;
   subcategories: Subcategory[];
 }
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -49,6 +55,63 @@ export default function CategoriesPage() {
     fetchCategories();
   }, []);
 
+  const startEdit = (category: Category) => {
+    setEditingId(category.id);
+    setEditName(category.name || '');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditName('');
+  };
+
+  const saveEdit = async (category: Category) => {
+    const nextName = editName.trim();
+    if (!nextName) {
+      toast({
+        title: 'Error',
+        description: 'Category name is required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/categories/${category.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: nextName,
+          slug: category.slug,
+          description: category.description ?? null,
+          imageUrl: category.image ?? null,
+          sortOrder: category.sort_order ?? undefined
+        }),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Update failed');
+      setCategories(prev =>
+        prev.map(item =>
+          item.id === category.id ? { ...item, name: nextName } : item
+        )
+      );
+      setEditingId(null);
+      setEditName('');
+      toast({
+        title: 'Success',
+        description: 'Category updated.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update category.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -68,22 +131,72 @@ export default function CategoriesPage() {
         {/* Categories List */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {categories.map((category) => (
-            <Link key={category.id} href={`/admin/categories/${category.id}`}>
-              <div className="border border-slate-200 rounded-lg p-5 bg-white shadow-sm hover:shadow transition-shadow flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-md bg-slate-100 flex items-center justify-center text-slate-600 text-xs font-semibold">
-                    {category.name?.split(' ').map((w: string) => w[0]).slice(0, 2).join('')}
+            <div
+              key={category.id}
+              className="border border-slate-200 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div className="flex gap-4 p-4">
+                <div className="h-16 w-16 rounded-md bg-slate-100 overflow-hidden flex items-center justify-center text-slate-500 text-xs font-semibold shrink-0">
+                  {category.image ? (
+                    <img src={category.image} alt={category.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <span>{category.name?.split(' ').map((w: string) => w[0]).slice(0, 2).join('')}</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  {editingId === category.id ? (
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="w-full text-sm font-semibold text-slate-900 px-2 py-1 rounded-md border border-slate-200"
+                    />
+                  ) : (
+                    <div className="text-sm font-semibold text-slate-900 truncate">{category.name}</div>
+                  )}
+                  <div className="text-xs text-slate-500 mt-1">
+                    {category.subcategories.length} Subcategories
                   </div>
-                  <div>
-                    <h2 className="text-base font-semibold text-slate-900">{category.name}</h2>
-                    <p className="text-sm text-slate-500 mt-1">
-                      {category.subcategories.length} Subcategories
-                    </p>
+                  <div className="mt-3 flex items-center gap-2">
+                    <Link href={`/admin/categories/${category.id}`}>
+                      <Button variant="outline" className="h-8 px-3 text-xs">
+                        View
+                      </Button>
+                    </Link>
+                    {editingId === category.id ? (
+                      <>
+                        <Button
+                          className="h-8 px-3 text-xs gap-1"
+                          onClick={() => saveEdit(category)}
+                          disabled={isSaving}
+                        >
+                          <Check className="w-3 h-3" />
+                          Save
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="h-8 px-3 text-xs gap-1"
+                          onClick={cancelEdit}
+                          disabled={isSaving}
+                        >
+                          <X className="w-3 h-3" />
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        className="h-8 px-3 text-xs gap-1"
+                        onClick={() => startEdit(category)}
+                      >
+                        <Pencil className="w-3 h-3" />
+                        Edit Name
+                      </Button>
+                    )}
                   </div>
                 </div>
-                <ChevronRight className="w-5 h-5 text-slate-400 mt-1" />
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       </div>
