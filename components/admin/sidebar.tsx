@@ -20,7 +20,8 @@ import {
   Clock,
   Activity,
   ScrollText,
-  Trash2
+  Trash2,
+  Star
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEffect, useRef } from 'react';
@@ -100,6 +101,11 @@ const navItems = [
     label: 'Support',
     href: '/admin/support',
     icon: ScrollText,
+  },
+  {
+    label: 'Reviews',
+    href: '/admin/reviews',
+    icon: Star,
   },
   {
     label: 'Settings',
