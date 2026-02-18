@@ -129,7 +129,7 @@ const fetchJson = async (url: string) => {
   if (!json?.success) {
     throw new Error(json?.error || 'Request failed');
   }
-  return Array.isArray(json.data) ? json.data : [];
+  return json.data;
 };
 
 const normalizeUrl = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
@@ -146,42 +146,52 @@ const loadUrlsFromRows = (rows: any[], keys: string[]) => {
   return urls;
 };
 
+const loadUrlsFromData = (data: any, keys: string[]) => {
+  if (Array.isArray(data)) {
+    return loadUrlsFromRows(data, keys);
+  }
+  if (data && typeof data === 'object') {
+    return loadUrlsFromRows([data], keys);
+  }
+  return new Set<string>();
+};
+
 const sourceLoaders: Record<SourceKey, () => Promise<Set<string>>> = {
   hero: async () => {
     const data = await fetchJson(`${API_BASE_URL}/api/hero-slides`);
-    return loadUrlsFromRows(data, ['image_url', 'imageUrl', 'mobile_image_url', 'mobileImageUrl']);
+    return loadUrlsFromData(data, ['image_url', 'imageUrl', 'mobile_image_url', 'mobileImageUrl']);
   },
   trends: async () => {
     const data = await fetchJson(`${API_BASE_URL}/api/trends`);
-    return loadUrlsFromRows(data, ['image_url', 'imageUrl']);
+    return loadUrlsFromData(data, ['image_url', 'imageUrl']);
   },
   products: async () => {
     const data = await fetchJson(`${API_BASE_URL}/api/products`);
-    return loadUrlsFromRows(data, ['image_url', 'imageUrl']);
+    return loadUrlsFromData(data, ['image_url', 'imageUrl']);
   },
   productImages: async () => {
     const data = await fetchJson(`${API_BASE_URL}/api/product-images`);
-    return loadUrlsFromRows(data, ['image_url', 'imageUrl']);
+    return loadUrlsFromData(data, ['image_url', 'imageUrl']);
   },
   categories: async () => {
     const data = await fetchJson(`${API_BASE_URL}/api/categories`);
-    return loadUrlsFromRows(data, ['image_url', 'imageUrl']);
+    return loadUrlsFromData(data, ['image_url', 'imageUrl']);
   },
   subcategories: async () => {
     const data = await fetchJson(`${API_BASE_URL}/api/subcategories`);
-    return loadUrlsFromRows(data, ['image_url', 'imageUrl']);
+    return loadUrlsFromData(data, ['image_url', 'imageUrl']);
   },
   aboutStory: async () => {
     const data = await fetchJson(`${API_BASE_URL}/api/about-story`);
-    return loadUrlsFromRows(data, ['image_url', 'imageUrl']);
+    return loadUrlsFromData(data, ['image_url', 'imageUrl']);
   },
   founders: async () => {
     const data = await fetchJson(`${API_BASE_URL}/api/founders`);
-    return loadUrlsFromRows(data, ['image_url', 'imageUrl']);
+    return loadUrlsFromData(data, ['image_url', 'imageUrl']);
   },
   leadership: async () => {
     const data = await fetchJson(`${API_BASE_URL}/api/leadership`);
-    return loadUrlsFromRows(data, ['image_url', 'imageUrl']);
+    return loadUrlsFromData(data, ['image_url', 'imageUrl']);
   }
 };
 
