@@ -133,10 +133,10 @@ export default function CategoriesPage() {
           {categories.map((category) => (
             <div
               key={category.id}
-              className="border border-slate-200 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow"
+              className="border border-slate-200 rounded-none bg-white shadow-sm hover:shadow-md transition-shadow"
             >
               <div className="flex gap-4 p-4">
-                <div className="h-16 w-16 rounded-md bg-slate-100 overflow-hidden flex items-center justify-center text-slate-500 text-xs font-semibold shrink-0">
+                <div className="h-16 w-16 rounded-none bg-slate-100 overflow-hidden flex items-center justify-center text-slate-500 text-xs font-semibold shrink-0">
                   {category.image ? (
                     <img src={category.image} alt={category.name} className="h-full w-full object-cover" />
                   ) : (

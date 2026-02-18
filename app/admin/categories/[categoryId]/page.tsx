@@ -360,10 +360,10 @@ export default function CategoryDetailsPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {subcategories.map((sub) => (
-            <Card key={sub.id} className="p-5 border border-slate-200 rounded-lg shadow-sm hover:shadow transition-shadow bg-white">
+          <Card key={sub.id} className="p-5 border border-slate-200 rounded-none shadow-sm hover:shadow transition-shadow bg-white">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
-                  <div className="h-12 w-12 rounded-md bg-slate-100 overflow-hidden flex items-center justify-center">
+                  <div className="h-12 w-12 rounded-none bg-slate-100 overflow-hidden flex items-center justify-center">
                     {sub.image_url ? (
                       <img src={sub.image_url} alt={sub.name} className="h-full w-full object-cover" />
                     ) : (
@@ -407,8 +407,8 @@ export default function CategoryDetailsPage() {
         </div>
       </div>
       {isEditOpen && editingSubId !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl border border-slate-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+          <div className="w-full max-w-lg rounded-none bg-white shadow-xl border border-slate-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
               <div>
                 <div className="text-lg font-semibold text-slate-900">Edit Subcategory</div>
@@ -487,8 +487,8 @@ export default function CategoryDetailsPage() {
         </div>
       )}
       {isDeleteOpen && deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-xl rounded-xl bg-white shadow-xl border border-slate-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+          <div className="w-full max-w-xl rounded-none bg-white shadow-xl border border-slate-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-amber-500" />
