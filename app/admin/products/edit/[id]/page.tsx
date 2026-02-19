@@ -28,7 +28,6 @@ export default function EditProductPage() {
     description: 'Creamy and delicious butter chicken with aromatic spices',
     price: '220',
     discount: '10',
-    tax: '5',
     category: 'main-course',
     subcategory: '',
     stock: '38',
@@ -41,6 +40,7 @@ export default function EditProductPage() {
   const [imageGallery, setImageGallery] = useState<string[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [subcategories, setSubcategories] = useState<any[]>([]);
+  const [taxRate, setTaxRate] = useState('5');
   const [isUploading, setIsUploading] = useState(false);
   const [loadedSubcategoryId, setLoadedSubcategoryId] = useState<string | null>(null);
   const [didHydrateCategory, setDidHydrateCategory] = useState(false);
@@ -89,6 +89,24 @@ export default function EditProductPage() {
   }, []);
 
   useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/settings`);
+        const result = await response.json();
+        if (result.success && result.data) {
+          const rate = result.data.tax_rate !== null && result.data.tax_rate !== undefined
+            ? String(result.data.tax_rate)
+            : '5';
+          setTaxRate(rate);
+        }
+      } catch {
+        // keep default tax rate if settings fail
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  useEffect(() => {
     const category = categories.find((c) => c.slug === formData.category);
     setSubcategories(category ? category.subcategories || [] : []);
   }, [categories, formData.category]);
@@ -111,7 +129,6 @@ export default function EditProductPage() {
             subcategory: subcategoryId,
             stock: String(prod.stock_quantity || 0),
             sku: prod.sku || '',
-            tax: prod.tax_percent ? String(prod.tax_percent) : '',
             status: prod.status || 'active',
             shippingType: prod.shipping_method || 'standard',
           }));
@@ -184,7 +201,7 @@ export default function EditProductPage() {
           inStock: Number(formData.stock || 0) > 0,
           stockQuantity: Number(formData.stock || 0),
           sku: formData.sku || null,
-          taxPercent: formData.tax ? Number(formData.tax) : null,
+          taxPercent: taxRate ? Number(taxRate) : null,
           shippingMethod: formData.shippingType || null,
           status: formData.status || 'active'
         })
@@ -511,11 +528,12 @@ export default function EditProductPage() {
                     <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Tax (%)</label>
                     <input
                       type="number"
-                      name="tax"
-                      value={formData.tax}
-                      onChange={handleChange}
-                      className="w-full px-4 py-2.5 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      value={taxRate}
+                      readOnly
+                      disabled
+                      className="w-full px-4 py-2.5 rounded-md bg-muted/60 border border-border text-foreground focus:outline-none"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Global VAT from Settings (read-only)</p>
                   </div>
 
                   <div>

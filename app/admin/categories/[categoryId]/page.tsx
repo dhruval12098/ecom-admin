@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ArrowLeft, Plus, Upload, X, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
@@ -406,137 +407,128 @@ export default function CategoryDetailsPage() {
           )}
         </div>
       </div>
-      {isEditOpen && editingSubId !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
-          <div className="w-full max-w-lg rounded-none bg-white shadow-xl border border-slate-200">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-              <div>
-                <div className="text-lg font-semibold text-slate-900">Edit Subcategory</div>
-                <div className="text-xs text-slate-500">Update details for the selected subcategory</div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  setIsEditOpen(false);
-                  setEditingSubId(null);
-                }}
-              >
-                <X className="w-4 h-4" />
-              </Button>
+      <Dialog
+        open={isEditOpen && editingSubId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsEditOpen(false);
+            setEditingSubId(null);
+          } else {
+            setIsEditOpen(true);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Subcategory</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-2">Subcategory Name</label>
+              <input
+                type="text"
+                value={editSub.name}
+                onChange={(e) => setEditSub({ ...editSub, name: e.target.value })}
+                className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
+              />
             </div>
-            <div className="px-6 py-4 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-foreground mb-2">Subcategory Name</label>
-                <input
-                  type="text"
-                  value={editSub.name}
-                  onChange={(e) => setEditSub({ ...editSub, name: e.target.value })}
-                  className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-foreground mb-2">Slug (optional)</label>
-                <input
-                  type="text"
-                  value={editSub.slug}
-                  onChange={(e) => setEditSub({ ...editSub, slug: e.target.value })}
-                  className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-foreground mb-2">Display Image</label>
-                <div className="flex items-center gap-3">
-                  <Button asChild variant="outline" className="gap-2">
-                      <label className="inline-flex items-center justify-center rounded-md bg-slate-200 text-black text-xs font-medium px-3 py-2 shadow-none border border-gray-300 cursor-pointer">
-                        Choose File
-                        <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleEditImageUpload}
-                        disabled={isUploading}
-                        className="sr-only"
-                      />
-                    </label>
-                  </Button>
-                  {editSub.imageUrl ? (
-                    <img
-                      src={editSub.imageUrl}
-                      alt="Subcategory"
-                      className="w-16 h-16 object-cover rounded-md border"
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-2">Slug (optional)</label>
+              <input
+                type="text"
+                value={editSub.slug}
+                onChange={(e) => setEditSub({ ...editSub, slug: e.target.value })}
+                className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-2">Display Image</label>
+              <div className="flex items-center gap-3">
+                <Button asChild variant="outline" className="gap-2">
+                  <label className="inline-flex items-center justify-center rounded-md bg-slate-200 text-black text-xs font-medium px-3 py-2 shadow-none border border-gray-300 cursor-pointer">
+                    Choose File
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleEditImageUpload}
+                      disabled={isUploading}
+                      className="sr-only"
                     />
-                  ) : (
-                    <span className="text-xs text-muted-foreground">No image</span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex gap-2 justify-end">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setIsEditOpen(false);
-                  setEditingSubId(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleEditSubcategory}>Save Changes</Button>
-            </div>
-          </div>
-        </div>
-      )}
-      {isDeleteOpen && deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
-          <div className="w-full max-w-xl rounded-none bg-white shadow-xl border border-slate-200">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-amber-500" />
-                <div>
-                  <div className="text-lg font-semibold text-slate-900">Delete Subcategory</div>
-                  <div className="text-xs text-slate-500">This action cannot be undone.</div>
-                </div>
-              </div>
-              <Button variant="ghost" size="icon" onClick={closeDeleteModal}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="px-6 py-4 space-y-3">
-              <div className="text-sm text-slate-700">
-                Deleting <span className="font-semibold">{deleteTarget.name}</span> will also delete the products listed below.
-              </div>
-              <div className="border border-slate-200 rounded-lg max-h-56 overflow-auto">
-                {deleteTarget.products && deleteTarget.products.length > 0 ? (
-                  <ul className="divide-y divide-slate-100">
-                    {deleteTarget.products.map((product) => (
-                      <li key={product.id} className="px-4 py-2 text-sm text-slate-700">
-                        {product.name}
-                      </li>
-                    ))}
-                  </ul>
+                  </label>
+                </Button>
+                {editSub.imageUrl ? (
+                  <img
+                    src={editSub.imageUrl}
+                    alt="Subcategory"
+                    className="w-16 h-16 object-cover rounded-md border"
+                  />
                 ) : (
-                  <div className="px-4 py-3 text-sm text-slate-500">No products found in this subcategory.</div>
+                  <span className="text-xs text-muted-foreground">No image</span>
                 )}
               </div>
-              <div className="text-xs text-slate-500">
-                If you want to keep these products, move them to another subcategory before deleting.
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex gap-2 justify-end">
-              <Button variant="outline" onClick={closeDeleteModal} disabled={isDeleting}>
-                Cancel
-              </Button>
-              <Button
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={confirmDelete}
-                disabled={isDeleting}
-              >
-                Delete Subcategory
-              </Button>
             </div>
           </div>
-        </div>
-      )}
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsEditOpen(false);
+                setEditingSubId(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleEditSubcategory}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteOpen && !!deleteTarget} onOpenChange={(open) => {
+        if (!open) closeDeleteModal();
+      }}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Delete Subcategory</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 text-sm text-slate-700">
+              <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-500" />
+              <span>This action cannot be undone.</span>
+            </div>
+            <div className="text-sm text-slate-700">
+              Deleting <span className="font-semibold">{deleteTarget?.name}</span> will also delete the products listed below.
+            </div>
+            <div className="border border-slate-200 rounded-lg max-h-56 overflow-auto">
+              {deleteTarget?.products && deleteTarget.products.length > 0 ? (
+                <ul className="divide-y divide-slate-100">
+                  {deleteTarget.products.map((product) => (
+                    <li key={product.id} className="px-4 py-2 text-sm text-slate-700">
+                      {product.name}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="px-4 py-3 text-sm text-slate-500">No products found in this subcategory.</div>
+              )}
+            </div>
+            <div className="text-xs text-slate-500">
+              If you want to keep these products, move them to another subcategory before deleting.
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={closeDeleteModal} disabled={isDeleting}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDelete}
+              disabled={isDeleting}
+            >
+              Delete Subcategory
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 }

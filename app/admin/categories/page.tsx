@@ -2,10 +2,21 @@
 
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
-import { Plus, Pencil, Check, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, TriangleAlert } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 
@@ -31,8 +42,11 @@ interface Category {
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -58,11 +72,13 @@ export default function CategoriesPage() {
   const startEdit = (category: Category) => {
     setEditingId(category.id);
     setEditName(category.name || '');
+    setIsEditOpen(true);
   };
 
   const cancelEdit = () => {
     setEditingId(null);
     setEditName('');
+    setIsEditOpen(false);
   };
 
   const saveEdit = async (category: Category) => {
@@ -97,6 +113,7 @@ export default function CategoriesPage() {
       );
       setEditingId(null);
       setEditName('');
+      setIsEditOpen(false);
       toast({
         title: 'Success',
         description: 'Category updated.',
@@ -109,6 +126,34 @@ export default function CategoriesPage() {
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/categories/${deleteTarget.id}`, {
+        method: 'DELETE'
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Delete failed');
+      }
+      setCategories(prev => prev.filter(cat => cat.id !== deleteTarget.id));
+      toast({
+        title: 'Deleted',
+        description: 'Category removed successfully.',
+      });
+      setDeleteTarget(null);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete category.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -133,8 +178,16 @@ export default function CategoriesPage() {
           {categories.map((category) => (
             <div
               key={category.id}
-              className="border border-slate-200 rounded-none bg-white shadow-sm hover:shadow-md transition-shadow"
+              className="relative border border-slate-200 rounded-none bg-white shadow-sm hover:shadow-md transition-shadow"
             >
+              <button
+                type="button"
+                aria-label="Delete category"
+                className="absolute right-3 top-3 text-destructive hover:text-destructive/80"
+                onClick={() => setDeleteTarget(category)}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
               <div className="flex gap-4 p-4">
                 <div className="h-16 w-16 rounded-none bg-slate-100 overflow-hidden flex items-center justify-center text-slate-500 text-xs font-semibold shrink-0">
                   {category.image ? (
@@ -144,16 +197,7 @@ export default function CategoriesPage() {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  {editingId === category.id ? (
-                    <input
-                      type="text"
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      className="w-full text-sm font-semibold text-slate-900 px-2 py-1 rounded-md border border-slate-200"
-                    />
-                  ) : (
-                    <div className="text-sm font-semibold text-slate-900 truncate">{category.name}</div>
-                  )}
+                  <div className="text-sm font-semibold text-slate-900 truncate">{category.name}</div>
                   <div className="text-xs text-slate-500 mt-1">
                     {category.subcategories.length} Subcategories
                   </div>
@@ -163,36 +207,14 @@ export default function CategoriesPage() {
                         View
                       </Button>
                     </Link>
-                    {editingId === category.id ? (
-                      <>
-                        <Button
-                          className="h-8 px-3 text-xs gap-1"
-                          onClick={() => saveEdit(category)}
-                          disabled={isSaving}
-                        >
-                          <Check className="w-3 h-3" />
-                          Save
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="h-8 px-3 text-xs gap-1"
-                          onClick={cancelEdit}
-                          disabled={isSaving}
-                        >
-                          <X className="w-3 h-3" />
-                          Cancel
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        className="h-8 px-3 text-xs gap-1"
-                        onClick={() => startEdit(category)}
-                      >
-                        <Pencil className="w-3 h-3" />
-                        Edit Name
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline"
+                      className="h-8 px-3 text-xs gap-1"
+                      onClick={() => startEdit(category)}
+                    >
+                      <Pencil className="w-3 h-3" />
+                      Edit Name
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -200,6 +222,67 @@ export default function CategoriesPage() {
           ))}
         </div>
       </div>
+
+      <Dialog open={isEditOpen} onOpenChange={(open) => {
+        if (!open) cancelEdit();
+        else setIsEditOpen(true);
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Category Name</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-foreground">Category Name</label>
+            <input
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="w-full text-sm px-3 py-2 rounded-md border border-border bg-background text-foreground"
+            />
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={cancelEdit} disabled={isSaving}>Cancel</Button>
+            <Button
+              onClick={() => {
+                const category = categories.find((c) => c.id === editingId);
+                if (category) saveEdit(category);
+              }}
+              disabled={isSaving || !editName.trim()}
+            >
+              {isSaving ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => {
+        if (!open) setDeleteTarget(null);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Category?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  Deleting this category will also delete all subcategories and products.
+                  For safety, move products to another category before deleting.
+                </span>
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Category'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AdminLayout>
   );
 }

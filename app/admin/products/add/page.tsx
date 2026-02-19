@@ -24,7 +24,6 @@ export default function AddProductPage() {
     description: '',
     basePrice: '',
     discount: '',
-    tax: '',
     category: '',
     subcategory: '',
     stock: '',
@@ -38,6 +37,7 @@ export default function AddProductPage() {
   const [primaryImage, setPrimaryImage] = useState<string>('');
   const [categories, setCategories] = useState<any[]>([]);
   const [subcategories, setSubcategories] = useState<any[]>([]);
+  const [taxRate, setTaxRate] = useState('5');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
 
@@ -71,6 +71,24 @@ export default function AddProductPage() {
       }
     };
     fetchCategories();
+  }, []);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/settings`);
+        const result = await response.json();
+        if (result.success && result.data) {
+          const rate = result.data.tax_rate !== null && result.data.tax_rate !== undefined
+            ? String(result.data.tax_rate)
+            : '5';
+          setTaxRate(rate);
+        }
+      } catch (error) {
+        // keep default tax rate if settings fail
+      }
+    };
+    fetchSettings();
   }, []);
 
   useEffect(() => {
@@ -147,7 +165,7 @@ export default function AddProductPage() {
           inStock: Number(formData.stock || 0) > 0,
           stockQuantity: Number(formData.stock || 0),
           sku: formData.sku || null,
-          taxPercent: formData.tax ? Number(formData.tax) : null,
+          taxPercent: taxRate ? Number(taxRate) : null,
           shippingMethod: formData.shippingType || null,
           status: formData.status || 'active',
           weight: null,
@@ -472,12 +490,12 @@ export default function AddProductPage() {
                 <label className="block text-sm font-medium text-foreground mb-2">Tax (%)</label>
                 <input
                   type="number"
-                  name="tax"
-                  value={formData.tax}
-                  onChange={handleChange}
-                  placeholder="5"
-                  className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  value={taxRate}
+                  readOnly
+                  disabled
+                  className="w-full px-4 py-2 rounded-md bg-muted/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none"
                 />
+                <p className="text-xs text-muted-foreground mt-1">Global VAT from Settings (read-only)</p>
               </div>
 
               <div>

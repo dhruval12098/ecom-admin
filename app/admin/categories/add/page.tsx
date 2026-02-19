@@ -6,6 +6,7 @@ import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Upload } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -15,12 +16,14 @@ const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
 export default function AddCategoryPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [formData, setFormData] = useState({
     name: '',
     status: 'active',
   });
   const [imageUrl, setImageUrl] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -29,6 +32,7 @@ export default function AddCategoryPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!formData.name.trim()) {
       toast({
         title: 'Error',
@@ -37,6 +41,7 @@ export default function AddCategoryPage() {
       });
       return;
     }
+    setIsSubmitting(true);
     try {
       const slug = formData.name.toLowerCase().replace(/\s+/g, '-');
       const response = await fetch(`${API_BASE_URL}/api/categories`, {
@@ -48,20 +53,28 @@ export default function AddCategoryPage() {
           imageUrl: imageUrl || null
         })
       });
-      const result = await response.json();
-      if (!result.success) {
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) {
         throw new Error(result.error || 'Create failed');
       }
       toast({
         title: 'Success',
         description: 'Category created successfully.',
       });
+      const createdId = result?.data?.id;
+      if (createdId) {
+        router.push(`/admin/categories/${createdId}`);
+        return;
+      }
+      router.push('/admin/categories');
     } catch (error) {
       toast({
         title: 'Error',
         description: 'Failed to create category.',
         variant: 'destructive',
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -179,7 +192,9 @@ export default function AddCategoryPage() {
 
           {/* Actions */}
           <div className="flex gap-3">
-            <Button type="submit">Create Category</Button>
+            <Button type="submit" disabled={isSubmitting || isUploading}>
+              {isSubmitting ? 'Creating...' : 'Create Category'}
+            </Button>
             <Link href="/admin/categories">
               <Button variant="outline">Cancel</Button>
             </Link>

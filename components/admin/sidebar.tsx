@@ -93,11 +93,6 @@ const navItems = [
     icon: TrendingUp,
   },
   {
-    label: 'Activity Logs',
-    href: '/admin/audit-logs',
-    icon: Activity,
-  },
-  {
     label: 'Support',
     href: '/admin/support',
     icon: ScrollText,
