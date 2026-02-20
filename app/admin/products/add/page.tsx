@@ -166,7 +166,7 @@ export default function AddProductPage() {
           stockQuantity: Number(formData.stock || 0),
           sku: formData.sku || null,
           taxPercent: taxRate ? Number(taxRate) : null,
-          shippingMethod: formData.shippingType || null,
+          shippingMethod: formData.shippingType === 'free' ? 'free' : null,
           status: formData.status || 'active',
           weight: null,
           origin: null

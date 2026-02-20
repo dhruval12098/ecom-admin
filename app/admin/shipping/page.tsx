@@ -34,6 +34,11 @@ export default function ShippingPage() {
   const [saveMessage, setSaveMessage] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<any>(emptyRate);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [excludedCategoryIds, setExcludedCategoryIds] = useState<number[]>([]);
+  const [isSavingExclusions, setIsSavingExclusions] = useState(false);
+  const [exclusionDialogOpen, setExclusionDialogOpen] = useState(false);
+  const [exclusionSearch, setExclusionSearch] = useState('');
 
   useEffect(() => {
     const fetchRates = async () => {
@@ -51,6 +56,38 @@ export default function ShippingPage() {
       }
     };
     fetchRates();
+  }, []);
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/categories`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setCategories(result.data);
+        }
+      } catch (e) {
+        // keep UI stable on failure
+      }
+    };
+    loadCategories();
+  }, []);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/settings`);
+        const result = await response.json();
+        if (result.success && result.data) {
+          const raw = result.data.excluded_free_shipping_category_ids || [];
+          const parsed = Array.isArray(raw) ? raw : [];
+          setExcludedCategoryIds(parsed.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id)));
+        }
+      } catch (e) {
+        // keep UI stable on failure
+      }
+    };
+    loadSettings();
   }, []);
 
   const deliveryZones = useMemo(() => {
@@ -130,6 +167,49 @@ export default function ShippingPage() {
       setSaveMessage('Save failed');
     }
   };
+
+  const toggleExcludedCategory = (id: number) => {
+    setExcludedCategoryIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((cid) => cid !== id);
+      }
+      return [...prev, id];
+    });
+  };
+
+  const saveExcludedCategories = async () => {
+    try {
+      setIsSavingExclusions(true);
+      const response = await fetch(`${API_BASE_URL}/api/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          excluded_free_shipping_category_ids: excludedCategoryIds
+        })
+      });
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Save failed');
+      }
+      setSaveMessage('Saved');
+      setTimeout(() => setSaveMessage(''), 2000);
+    } catch (e) {
+      setSaveMessage('Save failed');
+    } finally {
+      setIsSavingExclusions(false);
+    }
+  };
+
+  const excludedCategoryNames = useMemo(() => {
+    const map = new Map(categories.map((c) => [Number(c.id), c.name]));
+    return excludedCategoryIds.map((id) => map.get(Number(id)) || `Category #${id}`);
+  }, [categories, excludedCategoryIds]);
+
+  const filteredCategories = useMemo(() => {
+    const q = exclusionSearch.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter((c) => String(c.name || '').toLowerCase().includes(q));
+  }, [categories, exclusionSearch]);
 
   return (
     <AdminLayout>
@@ -225,6 +305,85 @@ export default function ShippingPage() {
             Free shipping (conditional) is evaluated first, then standard rate applies.
           </p>
         </Card>
+
+        <Card className="p-5 flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Free Shipping Exclusions</h2>
+              <p className="text-sm text-muted-foreground">
+                Excluded categories do not count toward the free-shipping threshold.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setExclusionDialogOpen(true)}>
+                Select Categories
+              </Button>
+              <Button onClick={saveExcludedCategories} disabled={isSavingExclusions}>
+                {isSavingExclusions ? 'Saving...' : 'Save Exclusions'}
+              </Button>
+            </div>
+          </div>
+          <Separator />
+          {excludedCategoryIds.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No excluded categories selected.</div>
+          ) : (
+            <div className="flex flex-wrap gap-2 text-sm">
+              {excludedCategoryNames.map((name, index) => (
+                <span key={`${name}-${index}`} className="rounded-full border border-border bg-muted/40 px-3 py-1 text-muted-foreground">
+                  {name}
+                </span>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Dialog open={exclusionDialogOpen} onOpenChange={setExclusionDialogOpen}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Select Excluded Categories</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Search categories</Label>
+                <Input
+                  value={exclusionSearch}
+                  onChange={(e) => setExclusionSearch(e.target.value)}
+                  placeholder="Search by category name"
+                />
+              </div>
+              <div className="max-h-80 overflow-auto rounded-md border border-border">
+                {filteredCategories.length === 0 ? (
+                  <div className="p-4 text-sm text-muted-foreground">No matching categories.</div>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {filteredCategories.map((cat) => (
+                      <label key={cat.id} className="flex items-center gap-3 px-4 py-3 text-sm">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-border"
+                          checked={excludedCategoryIds.includes(Number(cat.id))}
+                          onChange={() => toggleExcludedCategory(Number(cat.id))}
+                        />
+                        <span className="text-foreground">{cat.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setExclusionDialogOpen(false)}>
+                Close
+              </Button>
+              <Button onClick={() => {
+                setExclusionDialogOpen(false);
+                saveExcludedCategories();
+              }} disabled={isSavingExclusions}>
+                {isSavingExclusions ? 'Saving...' : 'Save'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Card className="p-6">
           <h2 className="text-lg font-semibold text-foreground mb-4">All Shipping Rates</h2>
