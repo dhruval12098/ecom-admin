@@ -60,6 +60,18 @@ export default function OrdersPage() {
     return cleaned.replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
+  const splitPaymentMethod = (raw: string | null | undefined, brand?: string | null, methodType?: string | null) => {
+    if (brand) return { gateway: 'Worldline', detail: String(brand).toUpperCase() };
+    if (methodType) return { gateway: 'Worldline', detail: String(methodType).toUpperCase() };
+    if (!raw) return { gateway: 'Worldline', detail: '-' };
+    const value = String(raw).trim().toUpperCase();
+    if (value.startsWith('WORLDLINE_')) {
+      return { gateway: 'Worldline', detail: value.replace('WORLDLINE_', '') };
+    }
+    if (value === 'WORLDLINE') return { gateway: 'Worldline', detail: '-' };
+    return { gateway: normalizeStatus(value), detail: '-' };
+  };
+
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       const matchesSearch =
@@ -210,7 +222,14 @@ export default function OrdersPage() {
                         </Badge>
                       </td>
                       <td className="px-4 py-2 text-foreground whitespace-nowrap">
-                        {order.payment_method ? normalizeStatus(String(order.payment_method)) : '-'}
+                        {(() => {
+                          const parts = splitPaymentMethod(
+                            order.payment_method || order.paymentMethod || order.method || order.payment_gateway,
+                            order.payment_brand,
+                            order.payment_method_type
+                          );
+                          return parts.detail !== '-' ? parts.detail : parts.gateway;
+                        })()}
                       </td>
                       <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">
                         {order.created_at ? new Date(order.created_at).toLocaleDateString() : '-'}
