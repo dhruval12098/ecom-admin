@@ -78,7 +78,7 @@ export default function EditProductPage() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/categories`);
+        const response = await fetch(`${API_BASE_URL}/api/categories?includeInactive=true&includeEmpty=true`);
         const result = await response.json();
         if (result.success && Array.isArray(result.data)) {
           setCategories(result.data);

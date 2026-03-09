@@ -33,6 +33,7 @@ interface Category {
   id: number;
   name: string;
   slug: string;
+  status?: string | null;
   description?: string | null;
   image?: string | null;
   sort_order?: number | null;
@@ -41,9 +42,11 @@ interface Category {
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editName, setEditName] = useState('');
+  const [editStatus, setEditStatus] = useState<'active' | 'inactive'>('active');
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -52,7 +55,7 @@ export default function CategoriesPage() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/categories`);
+        const response = await fetch(`${API_BASE_URL}/api/categories?includeInactive=true&includeEmpty=true`);
         const result = await response.json();
         if (result.success && Array.isArray(result.data)) {
           setCategories(result.data);
@@ -72,12 +75,14 @@ export default function CategoriesPage() {
   const startEdit = (category: Category) => {
     setEditingId(category.id);
     setEditName(category.name || '');
+    setEditStatus((category.status || 'active').toLowerCase() === 'inactive' ? 'inactive' : 'active');
     setIsEditOpen(true);
   };
 
   const cancelEdit = () => {
     setEditingId(null);
     setEditName('');
+    setEditStatus('active');
     setIsEditOpen(false);
   };
 
@@ -101,18 +106,20 @@ export default function CategoriesPage() {
           slug: category.slug,
           description: category.description ?? null,
           imageUrl: category.image ?? null,
-          sortOrder: category.sort_order ?? undefined
+          sortOrder: category.sort_order ?? undefined,
+          status: editStatus
         }),
       });
       const result = await response.json();
       if (!result.success) throw new Error(result.error || 'Update failed');
       setCategories(prev =>
         prev.map(item =>
-          item.id === category.id ? { ...item, name: nextName } : item
+          item.id === category.id ? { ...item, name: nextName, status: editStatus } : item
         )
       );
       setEditingId(null);
       setEditName('');
+      setEditStatus('active');
       setIsEditOpen(false);
       toast({
         title: 'Success',
@@ -157,6 +164,12 @@ export default function CategoriesPage() {
     }
   };
 
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredCategories = categories.filter((category) => {
+    if (!normalizedSearch) return true;
+    return String(category.name || '').toLowerCase().includes(normalizedSearch);
+  });
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -173,53 +186,106 @@ export default function CategoriesPage() {
           </Link>
         </div>
 
-        {/* Categories List */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {categories.map((category) => (
-            <div
-              key={category.id}
-              className="relative border border-slate-200 rounded-none bg-white shadow-sm hover:shadow-md transition-shadow"
-            >
-              <button
-                type="button"
-                aria-label="Delete category"
-                className="absolute right-3 top-3 text-destructive hover:text-destructive/80"
-                onClick={() => setDeleteTarget(category)}
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-              <div className="flex gap-4 p-4">
-                <div className="h-16 w-16 rounded-none bg-slate-100 overflow-hidden flex items-center justify-center text-slate-500 text-xs font-semibold shrink-0">
-                  {category.image ? (
-                    <img src={category.image} alt={category.name} className="h-full w-full object-cover" />
-                  ) : (
-                    <span>{category.name?.split(' ').map((w: string) => w[0]).slice(0, 2).join('')}</span>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-slate-900 truncate">{category.name}</div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    {category.subcategories.length} Subcategories
-                  </div>
-                  <div className="mt-3 flex items-center gap-2">
-                    <Link href={`/admin/categories/${category.id}`}>
-                      <Button variant="outline" className="h-8 px-3 text-xs">
-                        View
-                      </Button>
-                    </Link>
-                    <Button
-                      variant="outline"
-                      className="h-8 px-3 text-xs gap-1"
-                      onClick={() => startEdit(category)}
-                    >
-                      <Pencil className="w-3 h-3" />
-                      Edit Name
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-xs">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search categories..."
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {filteredCategories.length} of {categories.length} categories
+          </div>
+        </div>
+
+        {/* Categories Table */}
+        <div className="overflow-hidden rounded-lg border border-border bg-card">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-muted/60 text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium">Category</th>
+                  <th className="px-4 py-3 text-left font-medium">Status</th>
+                  <th className="px-4 py-3 text-left font-medium">Subcategories</th>
+                  <th className="px-4 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredCategories.map((category) => {
+                  const status = (category.status || 'active').toLowerCase();
+                  const isInactive = status === 'inactive';
+                  return (
+                    <tr key={category.id} className="hover:bg-muted/30">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground overflow-hidden">
+                            {category.image ? (
+                              <img src={category.image} alt={category.name} className="h-full w-full object-cover" />
+                            ) : (
+                              <span>{category.name?.split(' ').map((w: string) => w[0]).slice(0, 2).join('')}</span>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-semibold text-foreground truncate">{category.name}</div>
+                            <div className="text-xs text-muted-foreground">/{category.slug}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            isInactive
+                              ? 'bg-rose-100 text-rose-700'
+                              : 'bg-emerald-100 text-emerald-700'
+                          }`}
+                        >
+                          {isInactive ? 'Inactive' : 'Active'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-foreground">
+                        {category.subcategories.length}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          <Link href={`/admin/categories/${category.id}`}>
+                            <Button variant="outline" className="h-8 px-3 text-xs">
+                              View
+                            </Button>
+                          </Link>
+                          <Button
+                            variant="outline"
+                            className="h-8 px-3 text-xs gap-1"
+                            onClick={() => startEdit(category)}
+                          >
+                            <Pencil className="w-3 h-3" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="h-8 px-3 text-xs text-destructive border-destructive/40 hover:border-destructive"
+                            onClick={() => setDeleteTarget(category)}
+                          >
+                            <Trash2 className="w-3 h-3 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredCategories.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">
+                      No categories found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -229,9 +295,9 @@ export default function CategoriesPage() {
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit Category Name</DialogTitle>
+            <DialogTitle>Edit Category</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <label className="block text-sm font-medium text-foreground">Category Name</label>
             <input
               type="text"
@@ -239,6 +305,17 @@ export default function CategoriesPage() {
               onChange={(e) => setEditName(e.target.value)}
               className="w-full text-sm px-3 py-2 rounded-md border border-border bg-background text-foreground"
             />
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Status</label>
+              <select
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value === 'inactive' ? 'inactive' : 'active')}
+                className="w-full px-3 py-2 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
           </div>
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={cancelEdit} disabled={isSaving}>Cancel</Button>
@@ -286,3 +363,4 @@ export default function CategoriesPage() {
     </AdminLayout>
   );
 }
+

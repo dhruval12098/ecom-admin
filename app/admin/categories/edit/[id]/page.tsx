@@ -67,12 +67,16 @@ export default function EditCategoryPage({ params }: { params: { id: string } })
   useEffect(() => {
     const fetchCategory = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/categories`);
+        const response = await fetch(`${API_BASE_URL}/api/categories?includeInactive=true&includeEmpty=true`);
         const result = await response.json();
         if (result.success && Array.isArray(result.data)) {
           const found = result.data.find((c: any) => String(c.id) === params.id);
           if (found) {
-            setFormData((prev) => ({ ...prev, name: found.name || '' }));
+            setFormData((prev) => ({
+              ...prev,
+              name: found.name || '',
+              status: found.status || 'active'
+            }));
             setImageUrl(found.image || found.image_url || '');
           }
         }
@@ -105,7 +109,8 @@ export default function EditCategoryPage({ params }: { params: { id: string } })
         body: JSON.stringify({
           name: formData.name,
           slug: slug,
-          imageUrl: imageUrl || null
+          imageUrl: imageUrl || null,
+          status: formData.status
         })
       });
       const result = await response.json();

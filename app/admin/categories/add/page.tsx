@@ -50,7 +50,8 @@ export default function AddCategoryPage() {
         body: JSON.stringify({
           name: formData.name,
           slug: slug,
-          imageUrl: imageUrl || null
+          imageUrl: imageUrl || null,
+          status: formData.status
         })
       });
       const result = await response.json().catch(() => ({}));

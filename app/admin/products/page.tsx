@@ -38,7 +38,7 @@ export default function ProductsPage() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/categories`);
+        const response = await fetch(`${API_BASE_URL}/api/categories?includeInactive=true&includeEmpty=true`);
         const result = await response.json();
         if (result.success && Array.isArray(result.data)) {
           const map: Record<string, string> = {};
@@ -201,3 +201,4 @@ export default function ProductsPage() {
     </AdminLayout>
   );
 }
+

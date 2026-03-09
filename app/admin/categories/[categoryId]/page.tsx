@@ -49,7 +49,7 @@ export default function CategoryDetailsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/categories`);
+        const response = await fetch(`${API_BASE_URL}/api/categories?includeInactive=true&includeEmpty=true`);
         const result = await response.json();
         if (result.success && Array.isArray(result.data)) {
           const cat = result.data.find((c: any) => String(c.id) === categoryId);

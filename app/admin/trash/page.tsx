@@ -174,7 +174,7 @@ const sourceLoaders: Record<SourceKey, () => Promise<Set<string>>> = {
     return loadUrlsFromData(data, ['image_url', 'imageUrl']);
   },
   categories: async () => {
-    const data = await fetchJson(`${API_BASE_URL}/api/categories`);
+    const data = await fetchJson(`${API_BASE_URL}/api/categories?includeInactive=true&includeEmpty=true`);
     return loadUrlsFromData(data, ['image_url', 'imageUrl']);
   },
   subcategories: async () => {
@@ -506,3 +506,4 @@ export default function AdminTrashPage() {
     </AdminLayout>
   );
 }
+

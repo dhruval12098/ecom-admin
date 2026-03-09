@@ -28,9 +28,22 @@ const emptyRate = {
   active: true
 };
 
+const emptyZone = {
+  id: null,
+  country: 'Belgium',
+  city: '',
+  postal_code: '',
+  phase_label: '',
+  active: true
+};
+
 export default function ShippingPage() {
   const [shippingRates, setShippingRates] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [deliveryZones, setDeliveryZones] = useState<any[]>([]);
+  const [isLoadingZones, setIsLoadingZones] = useState(true);
+  const [zoneDialogOpen, setZoneDialogOpen] = useState(false);
+  const [zoneDraft, setZoneDraft] = useState<any>(emptyZone);
   const [saveMessage, setSaveMessage] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState<any>(emptyRate);
@@ -39,6 +52,26 @@ export default function ShippingPage() {
   const [isSavingExclusions, setIsSavingExclusions] = useState(false);
   const [exclusionDialogOpen, setExclusionDialogOpen] = useState(false);
   const [exclusionSearch, setExclusionSearch] = useState('');
+  const [shippoAddress, setShippoAddress] = useState({
+    street1: '',
+    street2: '',
+    city: '',
+    state: '',
+    zip: '',
+    country: 'BE'
+  });
+  const [shippoParcel, setShippoParcel] = useState({
+    length: '10',
+    width: '10',
+    height: '5',
+    distance_unit: 'cm',
+    weight: '1',
+    mass_unit: 'kg'
+  });
+  const [shippoResult, setShippoResult] = useState<any>(null);
+  const [shippoMode, setShippoMode] = useState<'validate' | 'rates' | null>(null);
+  const [isShippoLoading, setIsShippoLoading] = useState(false);
+  const [shippoDialogOpen, setShippoDialogOpen] = useState(false);
 
   useEffect(() => {
     const fetchRates = async () => {
@@ -59,9 +92,27 @@ export default function ShippingPage() {
   }, []);
 
   useEffect(() => {
+    const fetchZones = async () => {
+      try {
+        setIsLoadingZones(true);
+        const response = await fetch(`${API_BASE_URL}/api/delivery-zones`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setDeliveryZones(result.data);
+        }
+      } catch (e) {
+        // keep UI stable on failure
+      } finally {
+        setIsLoadingZones(false);
+      }
+    };
+    fetchZones();
+  }, []);
+
+  useEffect(() => {
     const loadCategories = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/categories`);
+        const response = await fetch(`${API_BASE_URL}/api/categories?includeInactive=true&includeEmpty=true`);
         const result = await response.json();
         if (result.success && Array.isArray(result.data)) {
           setCategories(result.data);
@@ -90,7 +141,7 @@ export default function ShippingPage() {
     loadSettings();
   }, []);
 
-  const deliveryZones = useMemo(() => {
+  const shippingZones = useMemo(() => {
     return shippingRates
       .filter((rate) => rate.type === 'basic')
       .map((rate) => ({
@@ -135,6 +186,23 @@ export default function ShippingPage() {
     setDialogOpen(true);
   };
 
+  const openZoneCreate = () => {
+    setZoneDraft({ ...emptyZone });
+    setZoneDialogOpen(true);
+  };
+
+  const openZoneEdit = (zone: any) => {
+    setZoneDraft({
+      id: zone.id,
+      country: zone.country || 'Belgium',
+      city: zone.city || '',
+      postal_code: zone.postal_code || '',
+      phase_label: zone.phase_label || '',
+      active: !!zone.active
+    });
+    setZoneDialogOpen(true);
+  };
+
   const handleSave = async () => {
     try {
       setSaveMessage('');
@@ -161,6 +229,38 @@ export default function ShippingPage() {
       }
 
       setDialogOpen(false);
+      setSaveMessage('Saved');
+      setTimeout(() => setSaveMessage(''), 2000);
+    } catch (e) {
+      setSaveMessage('Save failed');
+    }
+  };
+
+  const handleZoneSave = async () => {
+    try {
+      setSaveMessage('');
+      if (zoneDraft.id) {
+        const response = await fetch(`${API_BASE_URL}/api/delivery-zones/${zoneDraft.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(zoneDraft)
+        });
+        const result = await response.json();
+        if (result.success) {
+          setDeliveryZones((prev) => prev.map((z) => (z.id === zoneDraft.id ? result.data : z)));
+        }
+      } else {
+        const response = await fetch(`${API_BASE_URL}/api/delivery-zones`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(zoneDraft)
+        });
+        const result = await response.json();
+        if (result.success) {
+          setDeliveryZones((prev) => [...prev, result.data]);
+        }
+      }
+      setZoneDialogOpen(false);
       setSaveMessage('Saved');
       setTimeout(() => setSaveMessage(''), 2000);
     } catch (e) {
@@ -198,6 +298,99 @@ export default function ShippingPage() {
     } finally {
       setIsSavingExclusions(false);
     }
+  };
+
+  const runShippoValidation = async () => {
+    try {
+      setIsShippoLoading(true);
+      setShippoResult(null);
+      setShippoMode('validate');
+      const response = await fetch(`${API_BASE_URL}/api/shippo/validate-address`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(shippoAddress)
+      });
+      const result = await response.json();
+      setShippoResult(result);
+    } catch (e) {
+      setShippoResult({ success: false, message: 'Validation failed' });
+    } finally {
+      setIsShippoLoading(false);
+    }
+  };
+
+  const runShippoRates = async () => {
+    try {
+      setIsShippoLoading(true);
+      setShippoResult(null);
+      setShippoMode('rates');
+      const response = await fetch(`${API_BASE_URL}/api/shippo/rates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addressTo: shippoAddress, parcel: shippoParcel })
+      });
+      const result = await response.json();
+      setShippoResult(result);
+    } catch (e) {
+      setShippoResult({ success: false, message: 'Rate lookup failed' });
+    } finally {
+      setIsShippoLoading(false);
+    }
+  };
+
+  const renderShippoSummary = () => {
+    if (!shippoResult) return null;
+    if (!shippoResult.success) {
+      return (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {shippoResult.message || 'Shippo request failed.'}
+        </div>
+      );
+    }
+
+    if (shippoMode === 'validate') {
+      const data = shippoResult.data || {};
+      const isComplete = Boolean(data.is_complete);
+      const hasValidation = data.validation_results && Object.keys(data.validation_results).length > 0;
+      return (
+        <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 space-y-1">
+          <div className="font-semibold">
+            Validation: {isComplete ? 'Deliverable (complete)' : 'Partially complete'}
+          </div>
+          <div>Test mode: {data.test ? 'Yes' : 'No'}</div>
+          <div>Address: {data.street1}, {data.city} {data.zip}, {data.country}</div>
+          {hasValidation ? (
+            <div>Notes: {JSON.stringify(data.validation_results)}</div>
+          ) : (
+            <div>Notes: No validation warnings.</div>
+          )}
+        </div>
+      );
+    }
+
+    if (shippoMode === 'rates') {
+      const data = shippoResult.data || {};
+      const rates = Array.isArray(data.rates) ? data.rates : [];
+      if (!rates.length) {
+        return (
+          <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-700">
+            No rates returned. Check address or parcel details.
+          </div>
+        );
+      }
+      const cheapest = rates.reduce((min: any, r: any) => (Number(r.amount) < Number(min.amount) ? r : min), rates[0]);
+      const fastest = rates.reduce((min: any, r: any) => (Number(r.estimated_days) < Number(min.estimated_days) ? r : min), rates[0]);
+      return (
+        <div className="mt-4 rounded-lg border border-border bg-muted/20 p-4 text-sm space-y-2">
+          <div className="font-semibold text-foreground">Rates Summary</div>
+          <div>Cheapest: {cheapest.provider} {cheapest.servicelevel?.display_name || cheapest.servicelevel?.name} — {cheapest.amount} {cheapest.currency}</div>
+          <div>Fastest: {fastest.provider} {fastest.servicelevel?.display_name || fastest.servicelevel?.name} — {fastest.amount} {fastest.currency}</div>
+          <div className="text-xs text-muted-foreground">Total rates: {rates.length}</div>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   const excludedCategoryNames = useMemo(() => {
@@ -425,11 +618,142 @@ export default function ShippingPage() {
           )}
         </Card>
 
+        <Card className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Delivery Zones (Allowed Areas)</h2>
+              <p className="text-sm text-muted-foreground">
+                Orders are accepted only if the address matches an active zone.
+              </p>
+            </div>
+            <Button onClick={openZoneCreate}>Add Delivery Zone</Button>
+          </div>
+          {isLoadingZones ? (
+            <div className="text-sm text-muted-foreground">Loading delivery zones...</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Country</TableHead>
+                  <TableHead>City</TableHead>
+                  <TableHead>Postal Code</TableHead>
+                  <TableHead>Phase</TableHead>
+                  <TableHead>Active</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {deliveryZones.map((zone) => (
+                  <TableRow key={zone.id}>
+                    <TableCell className="font-medium">{zone.country || '-'}</TableCell>
+                    <TableCell>{zone.city || '-'}</TableCell>
+                    <TableCell>{zone.postal_code || '-'}</TableCell>
+                    <TableCell>{zone.phase_label || '-'}</TableCell>
+                    <TableCell>{zone.active ? 'Yes' : 'No'}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" onClick={() => openZoneEdit(zone)}>Edit</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Shippo Test (Validation & Rates)</h2>
+              <p className="text-sm text-muted-foreground">
+                Use your Shippo test key to validate an address and fetch sample rates.
+              </p>
+            </div>
+            <Button onClick={() => setShippoDialogOpen(true)}>Check Shippo</Button>
+          </div>
+        </Card>
+
+        <Dialog open={shippoDialogOpen} onOpenChange={setShippoDialogOpen}>
+          <DialogContent className="sm:max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Shippo Test (Validation & Rates)</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-3">
+                <Label>To Address</Label>
+                <Input placeholder="Street" value={shippoAddress.street1} onChange={(e) => setShippoAddress((p) => ({ ...p, street1: e.target.value }))} />
+                <Input placeholder="Unit (optional)" value={shippoAddress.street2} onChange={(e) => setShippoAddress((p) => ({ ...p, street2: e.target.value }))} />
+                <Input placeholder="City" value={shippoAddress.city} onChange={(e) => setShippoAddress((p) => ({ ...p, city: e.target.value }))} />
+                <Input placeholder="State/Region" value={shippoAddress.state} onChange={(e) => setShippoAddress((p) => ({ ...p, state: e.target.value }))} />
+                <Input placeholder="Postal Code" value={shippoAddress.zip} onChange={(e) => setShippoAddress((p) => ({ ...p, zip: e.target.value }))} />
+                <Input placeholder="Country (BE)" value={shippoAddress.country} onChange={(e) => setShippoAddress((p) => ({ ...p, country: e.target.value }))} />
+              </div>
+              <div className="space-y-3">
+                <Label>Parcel</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input placeholder="Length" value={shippoParcel.length} onChange={(e) => setShippoParcel((p) => ({ ...p, length: e.target.value }))} />
+                  <Input placeholder="Width" value={shippoParcel.width} onChange={(e) => setShippoParcel((p) => ({ ...p, width: e.target.value }))} />
+                  <Input placeholder="Height" value={shippoParcel.height} onChange={(e) => setShippoParcel((p) => ({ ...p, height: e.target.value }))} />
+                  <Input placeholder="Unit (cm)" value={shippoParcel.distance_unit} onChange={(e) => setShippoParcel((p) => ({ ...p, distance_unit: e.target.value }))} />
+                  <Input placeholder="Weight" value={shippoParcel.weight} onChange={(e) => setShippoParcel((p) => ({ ...p, weight: e.target.value }))} />
+                  <Input placeholder="Unit (kg)" value={shippoParcel.mass_unit} onChange={(e) => setShippoParcel((p) => ({ ...p, mass_unit: e.target.value }))} />
+                </div>
+                <div className="flex flex-wrap gap-3 pt-2">
+                  <Button variant="outline" onClick={runShippoValidation} disabled={isShippoLoading}>
+                    {isShippoLoading ? 'Working...' : 'Validate Address'}
+                  </Button>
+                  <Button onClick={runShippoRates} disabled={isShippoLoading}>
+                    {isShippoLoading ? 'Working...' : 'Get Rates'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+            {shippoResult && console.log('Shippo result:', shippoResult)}
+            {renderShippoSummary()}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShippoDialogOpen(false)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={zoneDialogOpen} onOpenChange={setZoneDialogOpen}>
+          <DialogContent className="sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle>{zoneDraft.id ? 'Edit Delivery Zone' : 'Add Delivery Zone'}</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Country</Label>
+                <Input value={zoneDraft.country} onChange={(e) => setZoneDraft({ ...zoneDraft, country: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Phase Label</Label>
+                <Input value={zoneDraft.phase_label} onChange={(e) => setZoneDraft({ ...zoneDraft, phase_label: e.target.value })} placeholder="Phase 1" />
+              </div>
+              <div className="space-y-2">
+                <Label>City (optional)</Label>
+                <Input value={zoneDraft.city} onChange={(e) => setZoneDraft({ ...zoneDraft, city: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Postal Code (optional)</Label>
+                <Input value={zoneDraft.postal_code} onChange={(e) => setZoneDraft({ ...zoneDraft, postal_code: e.target.value })} />
+              </div>
+              <div className="space-y-2 flex items-center gap-3 pt-6">
+                <Switch checked={!!zoneDraft.active} onCheckedChange={(checked) => setZoneDraft({ ...zoneDraft, active: checked })} />
+                <span className="text-sm text-muted-foreground">Active</span>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setZoneDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleZoneSave}>Save</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="p-4 border-2">
             <h3 className="font-semibold text-foreground mb-2">Standard Shipping Zones</h3>
             <div className="text-sm text-muted-foreground space-y-1">
-              {deliveryZones.filter((z) => z.type === 'basic').map((z) => (
+              {shippingZones.filter((z) => z.type === 'basic').map((z) => (
                 <div key={z.id}>
                   {z.zone} - {formatCurrency(Number(z.charge || 0))} ({z.estimatedDays})
                 </div>
@@ -441,3 +765,4 @@ export default function ShippingPage() {
     </AdminLayout>
   );
 }
+
