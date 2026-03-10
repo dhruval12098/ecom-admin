@@ -2,7 +2,7 @@
 
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Check, Download, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Check, Download, RotateCcw, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,6 +10,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useEffect, useState } from 'react';
 import { formatCurrency } from '@/lib/currency';
 import { useParams } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 
@@ -27,6 +28,7 @@ export default function OrderDetailsPage() {
   const [isSyncingPayment, setIsSyncingPayment] = useState(false);
   const [isRefunding, setIsRefunding] = useState(false);
   const [downloadSeconds, setDownloadSeconds] = useState(0);
+  const { toast } = useToast();
   const statusTone: Record<string, string> = {
     Pending: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
     Confirmed: 'bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300',
@@ -134,7 +136,7 @@ export default function OrderDetailsPage() {
     if (!orderId) return;
     try {
       setIsRefunding(true);
-      await fetch(`${API_BASE_URL}/api/worldline/refund`, {
+      const response = await fetch(`${API_BASE_URL}/api/worldline/refund`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -142,9 +144,21 @@ export default function OrderDetailsPage() {
         },
         body: JSON.stringify({ orderId })
       });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.message || 'Refund failed');
+      }
+      toast({
+        title: 'Refund successful',
+        description: 'The refund was processed and the order was cancelled.',
+      });
       await fetchOrder();
     } catch {
-      // keep UI stable if refund fails
+      toast({
+        title: 'Refund failed',
+        description: 'Unable to process the refund. Please try again.',
+        variant: 'destructive',
+      });
     } finally {
         setIsRefunding(false);
       }
@@ -188,8 +202,8 @@ export default function OrderDetailsPage() {
                 onConfirm={handleRefund}
                 trigger={(
                   <Button variant="outline" className="gap-2" disabled={isRefunding}>
-                    <RotateCcw className="w-4 h-4" />
-                    Refund
+                    {isRefunding ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                    {isRefunding ? 'Refunding...' : 'Refund'}
                   </Button>
                 )}
               />
@@ -215,6 +229,10 @@ export default function OrderDetailsPage() {
           <div className="bg-card border border-border rounded-lg p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Payment</p>
             {(() => {
+              const rawPaymentStatus = order?.payments?.[0]?.status || 'Pending';
+              const normalizedPaymentStatus = normalizeStatus(rawPaymentStatus);
+              const statusValue = String(rawPaymentStatus || '').toLowerCase();
+              const isRefundPending = statusValue === 'refund_pending' || statusValue === 'refund pending';
               const parts = splitPaymentMethod(
                 order?.payments?.[0]?.method || order?.payment_method || order?.paymentMethod,
                 order?.payments?.[0]?.payment_brand,
@@ -229,8 +247,14 @@ export default function OrderDetailsPage() {
                     <p className="text-xs text-muted-foreground mt-1">{parts.detail}</p>
                   )}
             <p className="text-xs text-muted-foreground mt-1">
-              {order?.payments?.[0]?.status || 'Pending'}
+              {normalizedPaymentStatus}
             </p>
+                  {(isRefunding || isRefundPending) && (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-amber-600">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Refund processing...
+                    </div>
+                  )}
                 </>
               );
             })()}

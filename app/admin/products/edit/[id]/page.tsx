@@ -16,6 +16,12 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 
 
 export default function EditProductPage() {
@@ -33,7 +39,7 @@ export default function EditProductPage() {
     stock: '38',
     sku: '',
     status: 'active',
-    shippingType: 'free',
+    shippingType: 'standard',
     hasVariants: false,
   });
   const [primaryImage, setPrimaryImage] = useState('');
@@ -41,7 +47,10 @@ export default function EditProductPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [subcategories, setSubcategories] = useState<any[]>([]);
   const [taxRate, setTaxRate] = useState('5');
+  const [customTaxEnabled, setCustomTaxEnabled] = useState(false);
+  const [customTaxRate, setCustomTaxRate] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [loadedSubcategoryId, setLoadedSubcategoryId] = useState<string | null>(null);
   const [didHydrateCategory, setDidHydrateCategory] = useState(false);
   const [variants, setVariants] = useState<Array<{
@@ -98,6 +107,7 @@ export default function EditProductPage() {
             ? String(result.data.tax_rate)
             : '5';
           setTaxRate(rate);
+          if (!customTaxEnabled) setCustomTaxRate(rate);
         }
       } catch {
         // keep default tax rate if settings fail
@@ -132,6 +142,14 @@ export default function EditProductPage() {
             status: prod.status || 'active',
             shippingType: prod.shipping_method || 'standard',
           }));
+          const prodTax = prod.tax_percent !== null && prod.tax_percent !== undefined ? String(prod.tax_percent) : '';
+          if (prodTax) {
+            setCustomTaxEnabled(true);
+            setCustomTaxRate(prodTax);
+          } else {
+            setCustomTaxEnabled(false);
+            setCustomTaxRate(taxRate);
+          }
           setLoadedSubcategoryId(subcategoryId || null);
           setPrimaryImage(prod.image_url || '');
           setImageGallery(prod.imageGallery || []);
@@ -182,9 +200,12 @@ export default function EditProductPage() {
       return;
     }
     try {
-      const slug = formData.name.toLowerCase().replace(/\s+/g, '-');
+      if (isSaving) return;
+      setIsSaving(true);
+      const slug = slugify(formData.name);
       const price = Number(formData.price);
       const discount = Number(formData.discount || 0);
+      const resolvedTax = customTaxEnabled ? Number(customTaxRate || 0) : null;
       const response = await fetch(`${API_BASE_URL}/api/products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -201,7 +222,7 @@ export default function EditProductPage() {
           inStock: Number(formData.stock || 0) > 0,
           stockQuantity: Number(formData.stock || 0),
           sku: formData.sku || null,
-          taxPercent: taxRate ? Number(taxRate) : null,
+          taxPercent: resolvedTax,
           shippingMethod: formData.shippingType === 'free' ? 'free' : null,
           status: formData.status || 'active'
         })
@@ -255,6 +276,8 @@ export default function EditProductPage() {
         description: 'Failed to update product.',
         variant: 'destructive',
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -418,7 +441,9 @@ export default function EditProductPage() {
             </div>
           </div>
           <div className="hidden md:flex gap-2">
-            <Button type="submit" form="edit-product-form">Update Product</Button>
+            <Button type="submit" form="edit-product-form" disabled={isSaving}>
+              {isSaving ? 'Updating...' : 'Update Product'}
+            </Button>
             <Link href="/admin/products">
               <Button variant="outline">Cancel</Button>
             </Link>
@@ -498,6 +523,12 @@ export default function EditProductPage() {
               <div className="bg-card border border-border rounded-xl p-6 space-y-5">
                 <h2 className="text-lg font-semibold text-foreground">Pricing & Stock</h2>
 
+                {formData.hasVariants && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    Variants are enabled. Customers will see the variant prices; the base price above is used only as a fallback.
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Price (€)</label>
@@ -511,30 +542,47 @@ export default function EditProductPage() {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Discount (%)</label>
-                    <input
-                      type="number"
-                      name="discount"
-                      value={formData.discount}
-                      onChange={handleChange}
-                      className="w-full px-4 py-2.5 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
+                    <div>
+                      <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Discount (%)</label>
+                      <input
+                        type="number"
+                        name="discount"
+                        value={formData.discount}
+                        onChange={handleChange}
+                        min={0}
+                        step={1}
+                        inputMode="numeric"
+                        onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                        placeholder="0"
+                        className="w-full px-4 py-2.5 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Tax (%)</label>
-                    <input
-                      type="number"
-                      value={taxRate}
-                      readOnly
-                      disabled
-                      className="w-full px-4 py-2.5 rounded-md bg-muted/60 border border-border text-foreground focus:outline-none"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">Global VAT from Settings (read-only)</p>
+                  <input
+                    type="number"
+                    value={customTaxEnabled ? customTaxRate : taxRate}
+                    onChange={(e) => setCustomTaxRate(e.target.value)}
+                    min={0}
+                    step={0.1}
+                    inputMode="decimal"
+                    onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                    disabled={!customTaxEnabled}
+                    className="w-full px-4 py-2.5 rounded-md bg-muted/60 border border-border text-foreground focus:outline-none"
+                  />
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      {customTaxEnabled ? 'Custom tax for this product' : 'Global VAT from Settings'}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Customize</span>
+                      <Switch checked={customTaxEnabled} onCheckedChange={setCustomTaxEnabled} />
+                    </div>
                   </div>
+                </div>
 
                   <div>
                     <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Stock Quantity</label>
@@ -749,7 +797,7 @@ export default function EditProductPage() {
             <div className="lg:col-span-5 space-y-6">
               {/* Image Upload */}
               <div className="bg-card border border-border rounded-xl p-6">
-                <label className="block text-sm font-semibold text-foreground mb-4">Product Image</label>
+                <label className="block text-sm font-semibold text-foreground mb-4">Display Image</label>
                 <div className="mb-4 w-full aspect-4/3 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                   {primaryImage ? (
                     <img
@@ -761,20 +809,22 @@ export default function EditProductPage() {
                     <div className="text-sm text-muted-foreground">No image</div>
                   )}
                 </div>
-                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:bg-muted/50 transition cursor-pointer">
-                  <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm font-medium text-foreground">Replace image</p>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) uploadMainImage(f);
-                    }}
-                    className="mt-3"
-                    disabled={isUploading}
-                  />
-                </div>
+                {!primaryImage && (
+                  <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:bg-muted/50 transition cursor-pointer">
+                    <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm font-medium text-foreground">Upload image</p>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) uploadMainImage(f);
+                      }}
+                      className="mt-3"
+                      disabled={isUploading}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Gallery Images */}
@@ -898,7 +948,9 @@ export default function EditProductPage() {
 
         {/* Mobile Actions */}
         <div className="md:hidden flex gap-3">
-          <Button type="submit" form="edit-product-form">Update Product</Button>
+          <Button type="submit" form="edit-product-form" disabled={isSaving}>
+            {isSaving ? 'Updating...' : 'Update Product'}
+          </Button>
           <Link href="/admin/products">
             <Button variant="outline">Cancel</Button>
           </Link>

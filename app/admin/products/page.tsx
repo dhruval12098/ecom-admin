@@ -8,17 +8,21 @@ import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Suspense } from 'react';
 import Loading from './loading';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useToast } from '@/hooks/use-toast';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 
 
 export default function ProductsPage() {
+  const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
   const [products, setProducts] = useState<any[]>([]);
   const [subcategoryLookup, setSubcategoryLookup] = useState<Record<string, string>>({});
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -34,6 +38,31 @@ export default function ProductsPage() {
     };
     fetchProducts();
   }, []);
+
+  const handleDelete = async (id: number) => {
+    if (deletingId !== null) return;
+    setDeletingId(id);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/products/${id}`, {
+        method: 'DELETE'
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Delete failed');
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+      toast({
+        title: 'Deleted',
+        description: 'Product removed successfully.'
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Delete failed',
+        description: err?.message || 'Unable to delete product.',
+        variant: 'destructive'
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -152,9 +181,22 @@ export default function ProductsPage() {
                         >
                           Edit
                         </Link>
-                        <button className="text-destructive hover:text-destructive/80 font-medium">
-                          Delete
-                        </button>
+                        <ConfirmDialog
+                          title="Delete product?"
+                          description="This action cannot be undone."
+                          confirmText={deletingId === product.id ? 'Deleting...' : 'Delete'}
+                          confirmVariant="destructive"
+                          onConfirm={() => handleDelete(product.id)}
+                          disabled={deletingId === product.id}
+                          trigger={
+                            <button
+                              className="text-destructive hover:text-destructive/80 font-medium disabled:opacity-60"
+                              disabled={deletingId === product.id}
+                            >
+                              {deletingId === product.id ? 'Deleting...' : 'Delete'}
+                            </button>
+                          }
+                        />
                       </td>
                     </tr>
                   ))}

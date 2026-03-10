@@ -5,6 +5,7 @@ import React from "react"
 
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { ArrowLeft, Upload, Plus, X } from 'lucide-react';
 import Link from 'next/link';
@@ -15,6 +16,12 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 
 export default function AddProductPage() {
   const { toast } = useToast();
@@ -30,7 +37,7 @@ export default function AddProductPage() {
     sku: '',
     status: 'active',
     hasVariants: false,
-    shippingType: 'free',
+    shippingType: 'standard',
   });
 
   const [imageGallery, setImageGallery] = useState<string[]>([]);
@@ -38,8 +45,11 @@ export default function AddProductPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [subcategories, setSubcategories] = useState<any[]>([]);
   const [taxRate, setTaxRate] = useState('5');
+  const [customTaxEnabled, setCustomTaxEnabled] = useState(false);
+  const [customTaxRate, setCustomTaxRate] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [variants, setVariants] = useState<Array<{
     id: string;
@@ -83,6 +93,7 @@ export default function AddProductPage() {
             ? String(result.data.tax_rate)
             : '5';
           setTaxRate(rate);
+          setCustomTaxRate(rate);
         }
       } catch (error) {
         // keep default tax rate if settings fail
@@ -146,9 +157,12 @@ export default function AddProductPage() {
       return;
     }
     try {
-      const slug = formData.name.toLowerCase().replace(/\\s+/g, '-');
+      if (isSaving) return;
+      setIsSaving(true);
+      const slug = slugify(formData.name);
       const price = Number(formData.basePrice);
       const discount = Number(formData.discount || 0);
+      const resolvedTax = customTaxEnabled ? Number(customTaxRate || 0) : null;
       const response = await fetch(`${API_BASE_URL}/api/products`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -165,7 +179,7 @@ export default function AddProductPage() {
           inStock: Number(formData.stock || 0) > 0,
           stockQuantity: Number(formData.stock || 0),
           sku: formData.sku || null,
-          taxPercent: taxRate ? Number(taxRate) : null,
+          taxPercent: resolvedTax,
           shippingMethod: formData.shippingType === 'free' ? 'free' : null,
           status: formData.status || 'active',
           weight: null,
@@ -214,6 +228,8 @@ export default function AddProductPage() {
         description: 'Failed to create product.',
         variant: 'destructive',
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -297,7 +313,7 @@ export default function AddProductPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Image Upload */}
           <div className="bg-card border border-border rounded-lg p-6">
-            <label className="block text-sm font-semibold text-foreground mb-4">Product Image</label>
+            <label className="block text-sm font-semibold text-foreground mb-4">Display Image</label>
             {primaryImage && (
               <div className="mb-4 w-24 h-24 rounded-lg bg-muted flex items-center justify-center overflow-hidden border">
                 <img
@@ -307,24 +323,23 @@ export default function AddProductPage() {
                 />
               </div>
             )}
-            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:bg-muted/50 transition cursor-pointer relative">
-              <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm font-medium text-foreground">Drag and drop your image here</p>
-              <p className="text-xs text-muted-foreground mt-1">or click to select</p>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) uploadMainImage(f);
-                }}
-                className="absolute inset-0 opacity-0 cursor-pointer"
-                disabled={isUploading}
-              />
-              {primaryImage && (
-                <p className="text-xs text-muted-foreground mt-2">Main image selected</p>
-              )}
-            </div>
+            {!primaryImage && (
+              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:bg-muted/50 transition cursor-pointer relative">
+                <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm font-medium text-foreground">Drag and drop your image here</p>
+                <p className="text-xs text-muted-foreground mt-1">or click to select</p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadMainImage(f);
+                  }}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  disabled={isUploading}
+                />
+              </div>
+            )}
           </div>
 
           {/* Gallery Images */}
@@ -446,6 +461,12 @@ export default function AddProductPage() {
           <div className="bg-card border border-border rounded-lg p-6 space-y-4">
             <h2 className="text-lg font-semibold text-foreground">Pricing & Stock</h2>
 
+            {formData.hasVariants && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                Variants are enabled. Customers will see the variant prices; the base price above is used only as a fallback.
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Base Price (€)</label>
@@ -480,6 +501,10 @@ export default function AddProductPage() {
                 value={formData.discount}
                 onChange={handleChange}
                 placeholder="0"
+                min={0}
+                step={1}
+                inputMode="numeric"
+                onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                 className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -490,12 +515,24 @@ export default function AddProductPage() {
                 <label className="block text-sm font-medium text-foreground mb-2">Tax (%)</label>
                 <input
                   type="number"
-                  value={taxRate}
-                  readOnly
-                  disabled
+                  value={customTaxEnabled ? customTaxRate : taxRate}
+                  onChange={(e) => setCustomTaxRate(e.target.value)}
+                  min={0}
+                  step={0.1}
+                  inputMode="decimal"
+                  onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                  disabled={!customTaxEnabled}
                   className="w-full px-4 py-2 rounded-md bg-muted/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none"
                 />
-                <p className="text-xs text-muted-foreground mt-1">Global VAT from Settings (read-only)</p>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    {customTaxEnabled ? 'Custom tax for this product' : 'Global VAT from Settings'}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Customize</span>
+                    <Switch checked={customTaxEnabled} onCheckedChange={setCustomTaxEnabled} />
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -579,16 +616,19 @@ export default function AddProductPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-foreground mb-1">Type</label>
-                    <select
+                    <Select
                       value={newVariant.type}
-                      onChange={(e) => setNewVariant({ ...newVariant, type: e.target.value })}
-                      className="w-full px-3 py-1.5 text-sm rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+                      onValueChange={(value) => setNewVariant({ ...newVariant, type: value })}
                     >
-                      <option value="size">Size</option>
-                      <option value="quantity">Quantity</option>
-                      <option value="pack_type">Pack Type</option>
-                      <option value="color">Color</option>
-                    </select>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="size">Size</SelectItem>
+                        <SelectItem value="weight">Weight</SelectItem>
+                        <SelectItem value="pack">Pack</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -667,7 +707,9 @@ export default function AddProductPage() {
 
           {/* Actions */}
           <div className="flex gap-3">
-            <Button type="submit">Save Product</Button>
+            <Button type="submit" disabled={isSaving}>
+              {isSaving ? 'Saving...' : 'Save Product'}
+            </Button>
             <Link href="/admin/products">
               <Button variant="outline">Cancel</Button>
             </Link>
