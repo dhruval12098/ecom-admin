@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,23 +11,9 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffect, useMemo, useState, Dispatch, SetStateAction } from 'react';
-import { formatCurrency } from '@/lib/currency';
 import { useToast } from '@/hooks/use-toast';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
-
-
-const emptyRate = {
-  id: null,
-  name: '',
-  type: 'basic',
-  min_order: null,
-  max_order: null,
-  price: 0,
-  zone: '',
-  estimated_days: '',
-  active: true
-};
 
 const emptyZone = {
   id: null,
@@ -35,19 +21,17 @@ const emptyZone = {
   city: '',
   postal_code: '',
   phase_label: '',
+  conditional: null,
+  min_order_amount: null,
+  delivery_fee: null,
   active: true
 };
 
 export default function ShippingPage() {
-  const [shippingRates, setShippingRates] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [deliveryZones, setDeliveryZones] = useState<any[]>([]);
   const [isLoadingZones, setIsLoadingZones] = useState(true);
   const [zoneDialogOpen, setZoneDialogOpen] = useState(false);
   const [zoneDraft, setZoneDraft] = useState<any>(emptyZone);
-  const [saveMessage, setSaveMessage] = useState('');
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [draft, setDraft] = useState<any>(emptyRate);
   const [categories, setCategories] = useState<any[]>([]);
   const [excludedCategoryIds, setExcludedCategoryIds] = useState<number[]>([]);
   const [isSavingExclusions, setIsSavingExclusions] = useState(false);
@@ -65,24 +49,6 @@ export default function ShippingPage() {
   const [scheduleError, setScheduleError] = useState('');
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const { toast } = useToast();
-
-  useEffect(() => {
-    const fetchRates = async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch(`${API_BASE_URL}/api/shipping-rates`);
-        const result = await response.json();
-        if (result.success && Array.isArray(result.data)) {
-          setShippingRates(result.data);
-        }
-      } catch (e) {
-        // keep UI stable on failure
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchRates();
-  }, []);
 
   useEffect(() => {
     const fetchZones = async () => {
@@ -150,51 +116,6 @@ export default function ShippingPage() {
     loadSettings();
   }, []);
 
-  const shippingZones = useMemo(() => {
-    return shippingRates
-      .filter((rate) => rate.type === 'basic')
-      .map((rate) => ({
-        id: rate.id,
-        zone: rate.zone || rate.name,
-        charge: rate.price,
-        estimatedDays: rate.estimated_days || '-',
-        type: rate.type
-      }));
-  }, [shippingRates]);
-
-  const hasBasicRate = useMemo(
-    () => shippingRates.some((rate) => rate.type === 'basic'),
-    [shippingRates]
-  );
-  const hasFreeRate = useMemo(
-    () => shippingRates.some((rate) => rate.type === 'free'),
-    [shippingRates]
-  );
-  const canAddRate = !hasBasicRate || !hasFreeRate;
-
-  const openCreate = () => {
-    setDraft({
-      ...emptyRate,
-      type: hasBasicRate && !hasFreeRate ? 'free' : 'basic'
-    });
-    setDialogOpen(true);
-  };
-
-  const openEdit = (rate: any) => {
-    setDraft({
-      id: rate.id,
-      name: rate.name || '',
-      type: rate.type || 'basic',
-      min_order: rate.min_order ?? null,
-      max_order: rate.max_order ?? null,
-      price: Number(rate.price || 0),
-      zone: rate.zone || '',
-      estimated_days: rate.estimated_days || '',
-      active: !!rate.active
-    });
-    setDialogOpen(true);
-  };
-
   const openZoneCreate = () => {
     setZoneDraft({ ...emptyZone });
     setZoneDialogOpen(true);
@@ -207,47 +128,16 @@ export default function ShippingPage() {
       city: zone.city || '',
       postal_code: zone.postal_code || '',
       phase_label: zone.phase_label || '',
+      conditional: zone.conditional ?? null,
+      min_order_amount: zone.min_order_amount ?? null,
+      delivery_fee: zone.delivery_fee ?? null,
       active: !!zone.active
     });
     setZoneDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    try {
-      setSaveMessage('');
-      if (draft.id) {
-        await fetch(`${API_BASE_URL}/api/shipping-rates/${draft.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(draft)
-        });
-      } else {
-        const response = await fetch(`${API_BASE_URL}/api/shipping-rates`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(draft)
-        });
-        const result = await response.json();
-        if (result.success) {
-          setShippingRates((prev) => [...prev, result.data]);
-        }
-      }
-
-      if (draft.id) {
-        setShippingRates((prev) => prev.map((r) => (r.id === draft.id ? { ...r, ...draft } : r)));
-      }
-
-      setDialogOpen(false);
-      setSaveMessage('Saved');
-      setTimeout(() => setSaveMessage(''), 2000);
-    } catch (e) {
-      setSaveMessage('Save failed');
-    }
-  };
-
   const handleZoneSave = async () => {
     try {
-      setSaveMessage('');
       if (zoneDraft.id) {
         const response = await fetch(`${API_BASE_URL}/api/delivery-zones/${zoneDraft.id}`, {
           method: 'PUT',
@@ -270,10 +160,9 @@ export default function ShippingPage() {
         }
       }
       setZoneDialogOpen(false);
-      setSaveMessage('Saved');
-      setTimeout(() => setSaveMessage(''), 2000);
+      toast({ title: 'Saved', description: 'Delivery zone updated.' });
     } catch (e) {
-      setSaveMessage('Save failed');
+      toast({ title: 'Save failed', description: 'Unable to save delivery zone.', variant: 'destructive' });
     }
   };
 
@@ -300,10 +189,9 @@ export default function ShippingPage() {
       if (!result.success) {
         throw new Error(result.error || 'Save failed');
       }
-      setSaveMessage('Saved');
-      setTimeout(() => setSaveMessage(''), 2000);
-    } catch (e) {
-      setSaveMessage('Save failed');
+      toast({ title: 'Saved', description: 'Exclusions updated.' });
+    } catch {
+      toast({ title: 'Save failed', description: 'Unable to save exclusions.', variant: 'destructive' });
     } finally {
       setIsSavingExclusions(false);
     }
@@ -313,29 +201,28 @@ export default function ShippingPage() {
     setter((prev) => (prev.includes(value) ? prev.filter((d) => d !== value) : [...prev, value]));
   };
 
+  const toMinutes = (hour: string, minute: string, meridiem: 'AM' | 'PM') => {
+    let h = parseInt(hour, 10) % 12;
+    if (meridiem === 'PM') h += 12;
+    return h * 60 + parseInt(minute, 10);
+  };
+
   const saveScheduleSettings = async () => {
     try {
-      if (isSavingSchedule) return;
       setIsSavingSchedule(true);
-      setSaveMessage('');
       setScheduleError('');
-      if (scheduleEnabled) {
-        const hasAll =
-          deliveryFromHour && deliveryFromMinute && deliveryFromMeridiem &&
-          deliveryToHour && deliveryToMinute && deliveryToMeridiem;
-        if (!hasAll) {
-          setScheduleError('Select a valid delivery time range.');
-          return;
-        }
-        const toMinutes = (hour: string, minute: string, meridiem: 'AM' | 'PM') => {
-          const h = Number(hour) % 12;
-          const base = meridiem === 'PM' ? h + 12 : h;
-          return base * 60 + Number(minute);
-        };
+      const canSaveRange =
+        deliveryFromHour && deliveryFromMinute && deliveryFromMeridiem &&
+        deliveryToHour && deliveryToMinute && deliveryToMeridiem;
+      if (scheduleEnabled && !canSaveRange) {
+        setScheduleError('Select a valid delivery time range.');
+        return;
+      }
+      if (scheduleEnabled && canSaveRange) {
         const fromTotal = toMinutes(deliveryFromHour, deliveryFromMinute, deliveryFromMeridiem);
         const toTotal = toMinutes(deliveryToHour, deliveryToMinute, deliveryToMeridiem);
-        if (fromTotal >= toTotal) {
-          setScheduleError('End time must be after start time.');
+        if (fromTotal === toTotal) {
+          setScheduleError('Delivery time range must be at least 30 minutes.');
           return;
         }
       }
@@ -367,7 +254,6 @@ export default function ShippingPage() {
       toast({ title: 'Schedule saved', description: 'Delivery schedule updated successfully.' });
     } catch (e) {
       toast({ title: 'Save failed', description: 'Unable to save schedule. Please try again.', variant: 'destructive' });
-      setSaveMessage('Save failed');
     } finally {
       setIsSavingSchedule(false);
     }
@@ -375,7 +261,6 @@ export default function ShippingPage() {
 
   const hourOptions = ['01','02','03','04','05','06','07','08','09','10','11','12'];
   const minuteOptions = ['00','15','30','45'];
-
   const dayOptions = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   const excludedCategoryNames = useMemo(() => {
@@ -394,94 +279,55 @@ export default function ShippingPage() {
       <div className="space-y-6">
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-semibold text-foreground">Shipping and Delivery</h1>
-          <p className="text-muted-foreground text-sm">Manage shipping types, rates and delivery zones</p>
+          <p className="text-muted-foreground text-sm">Manage delivery zones and per-phase shipping rules</p>
         </div>
 
-        <Card className="p-5 flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <Card className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
-              <h2 className="text-lg font-semibold text-foreground">Shipping Rates</h2>
-              <p className="text-sm text-muted-foreground">Add and manage one standard rate plus one conditional free rate.</p>
+              <h2 className="text-lg font-semibold text-foreground">Delivery Zones (Allowed Areas)</h2>
+              <p className="text-sm text-muted-foreground">
+                Orders are accepted only if the address matches an active zone. Fees are per phase.
+              </p>
             </div>
-            <div className="flex items-center gap-3">
-              {saveMessage && <span className="text-sm text-muted-foreground">{saveMessage}</span>}
-              {!canAddRate && (
-                <span className="text-xs text-muted-foreground">You already have both rates.</span>
-              )}
-              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-primary" onClick={openCreate} disabled={!canAddRate}>
-                    Add Shipping Rate
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>{draft.id ? 'Edit Shipping Rate' : 'Add Shipping Rate'}</DialogTitle>
-                  </DialogHeader>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Name</Label>
-                      <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Type</Label>
-                      <Select value={draft.type} onValueChange={(value) => setDraft({ ...draft, type: value })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="basic">standard</SelectItem>
-                          <SelectItem value="free">conditional free</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Price</Label>
-                      <Input type="number" value={draft.price} onChange={(e) => setDraft({ ...draft, price: Number(e.target.value || 0) })} />
-                      <p className="text-xs text-muted-foreground">{formatCurrency(Number(draft.price || 0))}</p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Zone</Label>
-                      <Input value={draft.zone} onChange={(e) => setDraft({ ...draft, zone: e.target.value })} />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Min Order (€)</Label>
-                      <Input type="number" value={draft.min_order ?? ''} onChange={(e) => setDraft({ ...draft, min_order: e.target.value === '' ? null : Number(e.target.value) })} />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Max Order (€)</Label>
-                      <Input type="number" value={draft.max_order ?? ''} onChange={(e) => setDraft({ ...draft, max_order: e.target.value === '' ? null : Number(e.target.value) })} />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Estimated Days</Label>
-                      <Input value={draft.estimated_days} onChange={(e) => setDraft({ ...draft, estimated_days: e.target.value })} />
-                    </div>
-
-                    <div className="space-y-2 flex items-center gap-3 pt-6">
-                      <Switch checked={!!draft.active} onCheckedChange={(checked) => setDraft({ ...draft, active: checked })} />
-                      <span className="text-sm text-muted-foreground">Active</span>
-                    </div>
-                  </div>
-
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSave}>Save</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
+            <Button onClick={openZoneCreate}>Add Delivery Zone</Button>
           </div>
-          <Separator />
-          <p className="text-sm text-muted-foreground">
-            Free shipping (conditional) is evaluated first, then standard rate applies.
-          </p>
+          {isLoadingZones ? (
+            <div className="text-sm text-muted-foreground">Loading delivery zones...</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Country</TableHead>
+                  <TableHead>City</TableHead>
+                  <TableHead>Postal Code</TableHead>
+                  <TableHead>Phase</TableHead>
+                  <TableHead>Conditional</TableHead>
+                  <TableHead>Min Order Amount</TableHead>
+                  <TableHead>Standard</TableHead>
+                  <TableHead>Active</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {deliveryZones.map((zone) => (
+                  <TableRow key={zone.id}>
+                    <TableCell className="font-medium">{zone.country || '-'}</TableCell>
+                    <TableCell>{zone.city || '-'}</TableCell>
+                    <TableCell>{zone.postal_code || '-'}</TableCell>
+                    <TableCell>{zone.phase_label || '-'}</TableCell>
+                    <TableCell>{zone.conditional ?? '-'}</TableCell>
+                    <TableCell>{zone.min_order_amount ?? '-'}</TableCell>
+                    <TableCell>{zone.delivery_fee ?? '-'}</TableCell>
+                    <TableCell>{zone.active ? 'Yes' : 'No'}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" onClick={() => openZoneEdit(zone)}>Edit</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </Card>
 
         <Card className="p-5 flex flex-col gap-4">
@@ -564,88 +410,6 @@ export default function ShippingPage() {
         </Dialog>
 
         <Card className="p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-4">All Shipping Rates</h2>
-          {isLoading ? (
-            <div className="text-sm text-muted-foreground">Loading shipping rates...</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Min</TableHead>
-                  <TableHead>Max</TableHead>
-                  <TableHead>Zone</TableHead>
-                  <TableHead>ETA</TableHead>
-                  <TableHead>Active</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {shippingRates.filter((rate) => rate.type === 'basic' || rate.type === 'free').map((rate) => (
-                  <TableRow key={rate.id}>
-                    <TableCell className="font-medium">{rate.name}</TableCell>
-                    <TableCell>{rate.type === 'basic' ? 'standard' : 'conditional free'}</TableCell>
-                    <TableCell>{formatCurrency(Number(rate.price || 0))}</TableCell>
-                    <TableCell>{rate.min_order ?? '-'}</TableCell>
-                    <TableCell>{rate.max_order ?? '-'}</TableCell>
-                    <TableCell>{rate.zone || '-'}</TableCell>
-                    <TableCell>{rate.estimated_days || '-'}</TableCell>
-                    <TableCell>{rate.active ? 'Yes' : 'No'}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="outline" size="sm" onClick={() => openEdit(rate)}>Edit</Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">Delivery Zones (Allowed Areas)</h2>
-              <p className="text-sm text-muted-foreground">
-                Orders are accepted only if the address matches an active zone.
-              </p>
-            </div>
-            <Button onClick={openZoneCreate}>Add Delivery Zone</Button>
-          </div>
-          {isLoadingZones ? (
-            <div className="text-sm text-muted-foreground">Loading delivery zones...</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Country</TableHead>
-                  <TableHead>City</TableHead>
-                  <TableHead>Postal Code</TableHead>
-                  <TableHead>Phase</TableHead>
-                  <TableHead>Active</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {deliveryZones.map((zone) => (
-                  <TableRow key={zone.id}>
-                    <TableCell className="font-medium">{zone.country || '-'}</TableCell>
-                    <TableCell>{zone.city || '-'}</TableCell>
-                    <TableCell>{zone.postal_code || '-'}</TableCell>
-                    <TableCell>{zone.phase_label || '-'}</TableCell>
-                    <TableCell>{zone.active ? 'Yes' : 'No'}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="outline" size="sm" onClick={() => openZoneEdit(zone)}>Edit</Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </Card>
-
-        <Card className="p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-foreground">Delivery Schedule</h2>
@@ -654,7 +418,6 @@ export default function ShippingPage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              {saveMessage && <span className="text-sm text-muted-foreground">{saveMessage}</span>}
               <Button onClick={saveScheduleSettings} disabled={isSavingSchedule}>
                 {isSavingSchedule ? 'Saving...' : 'Save Schedule'}
               </Button>
@@ -736,37 +499,27 @@ export default function ShippingPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {scheduleError && <div className="text-xs text-red-600">{scheduleError}</div>}
                 </div>
-                {scheduleError && (
-                  <p className="mt-2 text-xs text-destructive">{scheduleError}</p>
-                )}
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Pick a start and end time for deliveries (required).
-                </p>
               </div>
             </div>
 
-            <div className="rounded-xl border border-border bg-background p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Order Accept Days</p>
-                  <p className="text-xs text-muted-foreground">Orders can be placed on</p>
-                </div>
-                <span className="text-xs text-muted-foreground">{orderAcceptDays.length} selected</span>
-              </div>
-              <div className="mt-4 grid grid-cols-4 gap-2">
+            <div className="rounded-xl border border-border bg-muted/40 p-4">
+              <p className="text-sm font-medium text-foreground">Order Accept Days</p>
+              <p className="text-xs text-muted-foreground">Choose days you accept orders</p>
+              <div className="mt-4 flex flex-wrap gap-2">
                 {dayOptions.map((day) => {
                   const selected = orderAcceptDays.includes(day);
                   return (
                     <button
-                      key={`accept-${day}`}
+                      key={day}
                       type="button"
-                      onClick={() => toggleDay(day, setOrderAcceptDays)}
-                      className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
                         selected
-                          ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                          : 'border-border bg-muted/40 text-foreground hover:bg-muted'
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border text-muted-foreground hover:text-foreground'
                       }`}
+                      onClick={() => toggleDay(day, setOrderAcceptDays)}
                     >
                       {day}
                     </button>
@@ -775,29 +528,22 @@ export default function ShippingPage() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-border bg-background p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Delivery Days</p>
-                  <p className="text-xs text-muted-foreground">Orders delivered on</p>
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  {deliveryDays.length ? `${deliveryDays.length} selected` : 'Use order days'}
-                </span>
-              </div>
-              <div className="mt-4 grid grid-cols-4 gap-2">
+            <div className="rounded-xl border border-border bg-muted/40 p-4">
+              <p className="text-sm font-medium text-foreground">Delivery Days</p>
+              <p className="text-xs text-muted-foreground">Choose delivery days shown at checkout</p>
+              <div className="mt-4 flex flex-wrap gap-2">
                 {dayOptions.map((day) => {
                   const selected = deliveryDays.includes(day);
                   return (
                     <button
-                      key={`deliver-${day}`}
+                      key={day}
                       type="button"
-                      onClick={() => toggleDay(day, setDeliveryDays)}
-                      className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
                         selected
-                          ? 'border-primary bg-primary/10 text-primary shadow-sm'
-                          : 'border-border bg-muted/40 text-foreground hover:bg-muted'
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border text-muted-foreground hover:text-foreground'
                       }`}
+                      onClick={() => toggleDay(day, setDeliveryDays)}
                     >
                       {day}
                     </button>
@@ -826,6 +572,45 @@ export default function ShippingPage() {
                 <Input value={zoneDraft.phase_label} onChange={(e) => setZoneDraft({ ...zoneDraft, phase_label: e.target.value })} placeholder="Phase 1" />
               </div>
               <div className="space-y-2">
+                <Label>Conditional (Free ≥ Amount)</Label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{'\u20AC'}</span>
+                  <Input
+                    type="number"
+                    className="pl-7"
+                    value={zoneDraft.conditional ?? ''}
+                    onChange={(e) => setZoneDraft({ ...zoneDraft, conditional: e.target.value === '' ? null : Number(e.target.value) })}
+                    placeholder="e.g. 20"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Min Order Amount (Required to Place Order)</Label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{'\u20AC'}</span>
+                  <Input
+                    type="number"
+                    className="pl-7"
+                    value={zoneDraft.min_order_amount ?? ''}
+                    onChange={(e) => setZoneDraft({ ...zoneDraft, min_order_amount: e.target.value === '' ? null : Number(e.target.value) })}
+                    placeholder="e.g. 30"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Standard (Below Threshold)</Label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{'\u20AC'}</span>
+                  <Input
+                    type="number"
+                    className="pl-7"
+                    value={zoneDraft.delivery_fee ?? ''}
+                    onChange={(e) => setZoneDraft({ ...zoneDraft, delivery_fee: e.target.value === '' ? null : Number(e.target.value) })}
+                    placeholder="e.g. 7"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
                 <Label>City (optional)</Label>
                 <Input value={zoneDraft.city} onChange={(e) => setZoneDraft({ ...zoneDraft, city: e.target.value })} />
               </div>
@@ -845,20 +630,7 @@ export default function ShippingPage() {
           </DialogContent>
         </Dialog>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="p-4 border-2">
-            <h3 className="font-semibold text-foreground mb-2">Standard Shipping Zones</h3>
-            <div className="text-sm text-muted-foreground space-y-1">
-              {shippingZones.filter((z) => z.type === 'basic').map((z) => (
-                <div key={z.id}>
-                  {z.zone} - {formatCurrency(Number(z.charge || 0))} ({z.estimatedDays})
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
       </div>
     </AdminLayout>
   );
 }
-

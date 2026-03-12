@@ -53,14 +53,17 @@ export default function EditProductPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [loadedSubcategoryId, setLoadedSubcategoryId] = useState<string | null>(null);
   const [didHydrateCategory, setDidHydrateCategory] = useState(false);
-  const [variants, setVariants] = useState<Array<{
+  type Variant = {
     id?: string;
     name: string;
     type: string;
     price: string;
     stock: string;
     sku: string;
-  }>>([]);
+  };
+
+  const [variants, setVariants] = useState<Variant[]>([]);
+  const [mainVariantIndex, setMainVariantIndex] = useState<number | null>(null);
   const [isEditVariantOpen, setIsEditVariantOpen] = useState(false);
   const [editVariantIndex, setEditVariantIndex] = useState<number | null>(null);
   const [editVariantDraft, setEditVariantDraft] = useState({
@@ -153,15 +156,24 @@ export default function EditProductPage() {
           setLoadedSubcategoryId(subcategoryId || null);
           setPrimaryImage(prod.image_url || '');
           setImageGallery(prod.imageGallery || []);
-          setVariants((prod.variants || []).map((v: any) => ({
+          const loadedVariants: Variant[] = (prod.variants || []).map((v: any) => ({
             id: String(v.id),
             name: v.name || '',
             type: v.type || 'size',
             price: String(v.price || ''),
             stock: String(v.stockQuantity || 0),
             sku: v.sku || ''
-          })));
-          setFormData((prev) => ({ ...prev, hasVariants: (prod.variants || []).length > 0 }));
+          }));
+          setVariants(loadedVariants);
+          setFormData((prev) => ({ ...prev, hasVariants: loadedVariants.length > 0 }));
+          if (loadedVariants.length > 0) {
+            const priceMatchIndex = loadedVariants.findIndex(
+              (v) => String(v.price || '') === String(prod.price || '')
+            );
+            setMainVariantIndex(priceMatchIndex >= 0 ? priceMatchIndex : 0);
+          } else {
+            setMainVariantIndex(null);
+          }
         }
       } catch (error) {
         toast({
@@ -189,9 +201,20 @@ export default function EditProductPage() {
     setDidHydrateCategory(true);
   }, [didHydrateCategory, loadedSubcategoryId, categories, formData.category]);
 
+  useEffect(() => {
+    if (!formData.hasVariants) return;
+    if (variants.length === 0) return;
+    if (mainVariantIndex === null) {
+      setMainVariantIndex(0);
+    }
+  }, [formData.hasVariants, variants.length, mainVariantIndex]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.price || !formData.subcategory) {
+    const selectedVariant =
+      formData.hasVariants && mainVariantIndex !== null ? variants[mainVariantIndex] : null;
+    const resolvedPriceValue = selectedVariant?.price ? String(selectedVariant.price) : formData.price;
+    if (!formData.name || !resolvedPriceValue || !formData.subcategory) {
       toast({
         title: 'Error',
         description: 'Name, price, and subcategory are required.',
@@ -203,7 +226,7 @@ export default function EditProductPage() {
       if (isSaving) return;
       setIsSaving(true);
       const slug = slugify(formData.name);
-      const price = Number(formData.price);
+      const price = Number(resolvedPriceValue);
       const discount = Number(formData.discount || 0);
       const resolvedTax = customTaxEnabled ? Number(customTaxRate || 0) : null;
       const response = await fetch(`${API_BASE_URL}/api/products/${productId}`, {
@@ -316,13 +339,20 @@ export default function EditProductPage() {
         ...variants,
         { ...newVariant, id: undefined }
       ]);
+      if (mainVariantIndex === null) {
+        setMainVariantIndex(variants.length);
+      }
       setNewVariant({ name: '', type: 'size', price: '', stock: '', sku: '' });
     }
   };
 
   const removeVariant = async (id?: string) => {
     if (!id) {
-      setVariants(variants.slice(0, -1));
+      const next = variants.slice(0, -1);
+      setVariants(next);
+      if (mainVariantIndex !== null && mainVariantIndex >= next.length) {
+        setMainVariantIndex(next.length > 0 ? 0 : null);
+      }
       return;
     }
     try {
@@ -331,7 +361,16 @@ export default function EditProductPage() {
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || 'Delete failed');
-      setVariants(variants.filter(v => v.id !== id));
+      const removedIndex = variants.findIndex(v => v.id === id);
+      const next = variants.filter(v => v.id !== id);
+      setVariants(next);
+      if (mainVariantIndex !== null) {
+        if (removedIndex === mainVariantIndex) {
+          setMainVariantIndex(next.length > 0 ? 0 : null);
+        } else if (removedIndex >= 0 && removedIndex < mainVariantIndex) {
+          setMainVariantIndex(mainVariantIndex - 1);
+        }
+      }
       toast({ title: 'Success', description: 'Variant deleted.' });
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to delete variant.', variant: 'destructive' });
@@ -342,6 +381,9 @@ export default function EditProductPage() {
     setVariants((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], ...patch };
+      if (index === mainVariantIndex && patch.price !== undefined) {
+        setFormData((prevForm) => ({ ...prevForm, price: String(patch.price || '') }));
+      }
       return next;
     });
   };
@@ -423,6 +465,8 @@ export default function EditProductPage() {
   const removeImageSlot = (index: number) => {
     setImageGallery(prev => prev.filter((_, i) => i !== index));
   };
+
+  const pricingLocked = formData.hasVariants;
 
   return (
     <AdminLayout>
@@ -525,7 +569,7 @@ export default function EditProductPage() {
 
                 {formData.hasVariants && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                    Variants are enabled. Customers will see the variant prices; the base price above is used only as a fallback.
+                    Variants are enabled. Pricing & stock fields are locked; the main price is taken from the selected variant.
                   </div>
                 )}
 
@@ -538,6 +582,7 @@ export default function EditProductPage() {
                       value={formData.price}
                       onChange={handleChange}
                       required
+                      disabled={pricingLocked}
                       className="w-full px-4 py-2.5 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
@@ -554,6 +599,7 @@ export default function EditProductPage() {
                         inputMode="numeric"
                         onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                         placeholder="0"
+                        disabled={pricingLocked}
                         className="w-full px-4 py-2.5 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                       />
                     </div>
@@ -562,27 +608,27 @@ export default function EditProductPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Tax (%)</label>
-                  <input
-                    type="number"
-                    value={customTaxEnabled ? customTaxRate : taxRate}
-                    onChange={(e) => setCustomTaxRate(e.target.value)}
-                    min={0}
-                    step={0.1}
-                    inputMode="decimal"
-                    onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-                    disabled={!customTaxEnabled}
-                    className="w-full px-4 py-2.5 rounded-md bg-muted/60 border border-border text-foreground focus:outline-none"
-                  />
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <p className="text-xs text-muted-foreground">
-                      {customTaxEnabled ? 'Custom tax for this product' : 'Global VAT from Settings'}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Customize</span>
-                      <Switch checked={customTaxEnabled} onCheckedChange={setCustomTaxEnabled} />
+                    <input
+                      type="number"
+                      value={customTaxEnabled ? customTaxRate : taxRate}
+                      onChange={(e) => setCustomTaxRate(e.target.value)}
+                      min={0}
+                      step={0.1}
+                      inputMode="decimal"
+                      onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                      disabled={!customTaxEnabled || pricingLocked}
+                      className="w-full px-4 py-2.5 rounded-md bg-muted/60 border border-border text-foreground focus:outline-none"
+                    />
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        {customTaxEnabled ? 'Custom tax for this product' : 'Global VAT from Settings'}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Customize</span>
+                        <Switch checked={customTaxEnabled} onCheckedChange={setCustomTaxEnabled} disabled={pricingLocked} />
+                      </div>
                     </div>
                   </div>
-                </div>
 
                   <div>
                     <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Stock Quantity</label>
@@ -592,6 +638,7 @@ export default function EditProductPage() {
                       value={formData.stock}
                       onChange={handleChange}
                       required
+                      disabled={pricingLocked}
                       className="w-full px-4 py-2.5 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
@@ -602,6 +649,7 @@ export default function EditProductPage() {
                     <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Product Status</label>
                     <Select
                       value={formData.status}
+                      disabled={pricingLocked}
                       onValueChange={(value) => setFormData((prev) => ({ ...prev, status: value }))}
                     >
                       <SelectTrigger className="w-full">
@@ -622,6 +670,7 @@ export default function EditProductPage() {
                       value={formData.sku}
                       onChange={handleChange}
                       placeholder="SKU-001"
+                      disabled={pricingLocked}
                       className="w-full px-4 py-2.5 rounded-md bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
@@ -659,137 +708,6 @@ export default function EditProductPage() {
                   </label>
                 </div>
               </div>
-
-              {/* Product Variants */}
-              {formData.hasVariants && (
-                <div className="bg-card border border-border rounded-xl p-6 space-y-4">
-                  <h2 className="text-lg font-semibold text-foreground">Product Variants</h2>
-
-                  <div className="space-y-3 bg-muted/30 p-4 rounded-lg">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-foreground mb-1">Variant Name</label>
-                        <input
-                          type="text"
-                          value={newVariant.name}
-                          onChange={(e) => setNewVariant({ ...newVariant, name: e.target.value })}
-                          placeholder="e.g., 500g"
-                          className="w-full px-3 py-1.5 text-sm rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-foreground mb-1">Type</label>
-                        <Select
-                          value={newVariant.type}
-                          onValueChange={(value) => setNewVariant({ ...newVariant, type: value })}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="size">Size</SelectItem>
-                            <SelectItem value="weight">Weight</SelectItem>
-                            <SelectItem value="pack">Pack</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-foreground mb-1">Price (€)</label>
-                        <input
-                          type="number"
-                          value={newVariant.price}
-                          onChange={(e) => setNewVariant({ ...newVariant, price: e.target.value })}
-                          placeholder="Price"
-                          className="w-full px-3 py-1.5 text-sm rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-foreground mb-1">Stock</label>
-                        <input
-                          type="number"
-                          value={newVariant.stock}
-                          onChange={(e) => setNewVariant({ ...newVariant, stock: e.target.value })}
-                          placeholder="Stock"
-                          className="w-full px-3 py-1.5 text-sm rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-foreground mb-1">SKU</label>
-                        <input
-                          type="text"
-                          value={newVariant.sku}
-                          onChange={(e) => setNewVariant({ ...newVariant, sku: e.target.value })}
-                          placeholder="SKU"
-                          className="w-full px-3 py-1.5 text-sm rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
-                        />
-                      </div>
-                    </div>
-
-                    <Button
-                      type="button"
-                      onClick={addVariant}
-                      variant="outline"
-                      className="w-full gap-2 bg-transparent"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Variant
-                    </Button>
-                  </div>
-
-                  {variants.length > 0 && (
-                    <div className="border border-border rounded-lg overflow-hidden">
-                      <div className="bg-muted/30 px-4 py-2 flex items-center gap-2 text-sm font-medium text-foreground">
-                        Added Variants ({variants.length})
-                      </div>
-                      <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/30 text-muted-foreground">
-                          <tr>
-                            <th className="text-left font-medium px-4 py-2">Name</th>
-                            <th className="text-left font-medium px-4 py-2">Type</th>
-                            <th className="text-left font-medium px-4 py-2">Price</th>
-                            <th className="text-left font-medium px-4 py-2">Stock</th>
-                            <th className="text-left font-medium px-4 py-2">SKU</th>
-                            <th className="text-right font-medium px-4 py-2">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                          {variants.map((variant, index) => (
-                            <tr key={variant.id || `${variant.name}-${index}`}>
-                              <td className="px-4 py-3">{variant.name || '-'}</td>
-                              <td className="px-4 py-3 capitalize">{variant.type || '-'}</td>
-                              <td className="px-4 py-3">€{variant.price || '-'}</td>
-                              <td className="px-4 py-3">{variant.stock || '-'}</td>
-                              <td className="px-4 py-3">{variant.sku || '-'}</td>
-                              <td className="px-4 py-3 text-right space-x-2">
-                                <Button type="button" variant="outline" size="sm" onClick={() => openEditVariant(index)}>
-                                  Edit
-                                </Button>
-                                <ConfirmDialog
-                                  title="Delete variant?"
-                                  description="This will remove the variant immediately."
-                                  confirmText="Delete"
-                                  confirmVariant="destructive"
-                                  onConfirm={() => removeVariant(variant.id)}
-                                  trigger={
-                                    <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive/80">
-                                      Delete
-                                    </Button>
-                                  }
-                                />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
             
 
@@ -878,7 +796,152 @@ export default function EditProductPage() {
               </div>
             </div>
           </div>
-        
+
+          {/* Product Variants */}
+          {formData.hasVariants && (
+            <div className="bg-card border border-border rounded-xl p-6 space-y-4">
+              <h2 className="text-lg font-semibold text-foreground">Product Variants</h2>
+
+              <div className="space-y-3 bg-muted/30 p-4 rounded-lg">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-foreground mb-1">Variant Name</label>
+                    <input
+                      type="text"
+                      value={newVariant.name}
+                      onChange={(e) => setNewVariant({ ...newVariant, name: e.target.value })}
+                      placeholder="e.g., 500g"
+                      className="w-full px-3 py-1.5 text-sm rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-foreground mb-1">Type</label>
+                    <Select
+                      value={newVariant.type}
+                      onValueChange={(value) => setNewVariant({ ...newVariant, type: value })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="size">Size</SelectItem>
+                        <SelectItem value="weight">Weight</SelectItem>
+                        <SelectItem value="pack">Pack</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-foreground mb-1">Price (EUR)</label>
+                    <input
+                      type="number"
+                      value={newVariant.price}
+                      onChange={(e) => setNewVariant({ ...newVariant, price: e.target.value })}
+                      placeholder="Price"
+                      className="w-full px-3 py-1.5 text-sm rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-foreground mb-1">Stock</label>
+                    <input
+                      type="number"
+                      value={newVariant.stock}
+                      onChange={(e) => setNewVariant({ ...newVariant, stock: e.target.value })}
+                      placeholder="Stock"
+                      className="w-full px-3 py-1.5 text-sm rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-foreground mb-1">SKU</label>
+                    <input
+                      type="text"
+                      value={newVariant.sku}
+                      onChange={(e) => setNewVariant({ ...newVariant, sku: e.target.value })}
+                      placeholder="SKU"
+                      className="w-full px-3 py-1.5 text-sm rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={addVariant}
+                  variant="outline"
+                  className="w-full gap-2 bg-transparent"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Variant
+                </Button>
+              </div>
+
+              {variants.length > 0 && (
+                <div className="border border-border rounded-lg overflow-hidden w-full">
+                  <div className="bg-muted/30 px-4 py-2 flex items-center gap-2 text-sm font-medium text-foreground">
+                    Added Variants ({variants.length})
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/30 text-muted-foreground">
+                        <tr>
+                          <th className="text-left font-medium px-4 py-2">Name</th>
+                          <th className="text-left font-medium px-4 py-2">Type</th>
+                          <th className="text-left font-medium px-4 py-2">Price</th>
+                          <th className="text-left font-medium px-4 py-2">Stock</th>
+                          <th className="text-left font-medium px-4 py-2">SKU</th>
+                          <th className="text-left font-medium px-4 py-2">Main Price</th>
+                          <th className="text-right font-medium px-4 py-2">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {variants.map((variant, index) => (
+                          <tr key={variant.id || `${variant.name}-${index}`}>
+                            <td className="px-4 py-3">{variant.name || '-'}</td>
+                            <td className="px-4 py-3 capitalize">{variant.type || '-'}</td>
+                            <td className="px-4 py-3">EUR {variant.price || '-'}</td>
+                            <td className="px-4 py-3">{variant.stock || '-'}</td>
+                            <td className="px-4 py-3">{variant.sku || '-'}</td>
+                            <td className="px-4 py-3">
+                              <input
+                                type="radio"
+                                name="mainVariant"
+                                checked={mainVariantIndex === index}
+                                onChange={() => {
+                                  setMainVariantIndex(index);
+                                  setFormData((prev) => ({ ...prev, price: String(variant.price || '') }));
+                                }}
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-right space-x-2">
+                              <Button type="button" variant="outline" size="sm" onClick={() => openEditVariant(index)}>
+                                Edit
+                              </Button>
+                              <ConfirmDialog
+                                title="Delete variant?"
+                                description="This will remove the variant immediately."
+                                confirmText="Delete"
+                                confirmVariant="destructive"
+                                onConfirm={() => removeVariant(variant.id)}
+                                trigger={
+                                  <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive/80">
+                                    Delete
+                                  </Button>
+                                }
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+
+
           <Dialog open={isEditVariantOpen} onOpenChange={setIsEditVariantOpen}>
             <DialogContent className="sm:max-w-lg">
               <DialogHeader>

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Suspense } from 'react';
 import Loading from './loading';
+import Link from 'next/link';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 
@@ -21,11 +22,6 @@ export default function InventoryPage() {
 
   const [inventory, setInventory] = useState<any[]>([]);
   const [editingItem, setEditingItem] = useState<any | null>(null);
-  const [editStock, setEditStock] = useState('');
-  const [editMinLevel, setEditMinLevel] = useState('');
-  const [variantStocks, setVariantStocks] = useState<Record<number, string>>({});
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
 
   const fetchInventory = useCallback(async () => {
     try {
@@ -48,19 +44,33 @@ export default function InventoryPage() {
       );
 
       const normalized = withVariants.map((p: any) => {
-        const variants = p.variants || [];
+        const variants = Array.isArray(p.variants) ? p.variants : [];
         const hasVariants = variants.length > 0;
-        const totalVariantStock = variants.reduce((sum: number, v: any) => sum + (v.stock_quantity || 0), 0);
-        const totalStock = hasVariants ? totalVariantStock : (p.stock_quantity || 0);
-        const minLevel = p.low_stock_level || LOW_STOCK_DEFAULT;
+        const baseStock = Number(p.stock_quantity || 0);
+        const basePrice = Number(p.price || 0);
+        const totalVariantStock = variants.reduce((sum: number, v: any) => {
+          const qty = Number(v.stock_quantity ?? v.stockQuantity ?? 0);
+          return sum + (Number.isFinite(qty) ? qty : 0);
+        }, 0);
+        const totalVariantValue = variants.reduce((sum: number, v: any) => {
+          const qty = Number(v.stock_quantity ?? v.stockQuantity ?? 0);
+          const price = Number(v.price ?? v.variant_price ?? 0);
+          const safeQty = Number.isFinite(qty) ? qty : 0;
+          const safePrice = Number.isFinite(price) ? price : 0;
+          return sum + safeQty * safePrice;
+        }, 0);
+        const totalStock = hasVariants ? totalVariantStock : baseStock;
+        const totalValue = hasVariants ? totalVariantValue : baseStock * basePrice;
+        const minLevel = Number(p.low_stock_level ?? LOW_STOCK_DEFAULT);
         const status =
           totalStock === 0 ? 'Out of Stock' : totalStock < minLevel ? 'Low Stock' : 'Normal';
 
         return {
           id: p.id,
-          product: p.name,
-          price: Number(p.price || 0),
+          product: p.name || p.title || `Product ${p.id}`,
+          price: basePrice,
           stock: totalStock,
+          totalValue,
           reserved: 0,
           available: totalStock,
           minLevel,
@@ -86,89 +96,7 @@ export default function InventoryPage() {
   }, [fetchInventory]);
 
   const startEdit = (item: any) => {
-    setSaveError(null);
     setEditingItem(item);
-    setEditMinLevel(String(item.minLevel ?? ''));
-    if (item.variants && item.variants.length > 0) {
-      const next: Record<number, string> = {};
-      item.variants.forEach((v: any) => {
-        next[v.id] = String(v.stock_quantity ?? 0);
-      });
-      setVariantStocks(next);
-      setEditStock('');
-    } else {
-      setEditStock(String(item.stock ?? 0));
-      setVariantStocks({});
-    }
-  };
-
-  const closeEdit = () => {
-    if (isSaving) return;
-    setEditingItem(null);
-    setEditStock('');
-    setEditMinLevel('');
-    setVariantStocks({});
-    setSaveError(null);
-  };
-
-  const handleSave = async () => {
-    if (!editingItem) return;
-    setIsSaving(true);
-    setSaveError(null);
-    try {
-      const hasVariants = editingItem.variants && editingItem.variants.length > 0;
-      if (hasVariants) {
-        await Promise.all(
-          editingItem.variants.map(async (v: any) => {
-            const nextStock = Number(variantStocks[v.id]);
-            if (Number.isNaN(nextStock)) {
-              throw new Error('Invalid stock quantity for variant');
-            }
-            const payload = {
-              name: v.name,
-              price: v.price,
-              type: v.type || null,
-              stockQuantity: nextStock,
-              sku: v.sku || null,
-              sortOrder: v.sort_order || 0
-            };
-            const res = await fetch(`${API_BASE_URL}/api/products/variants/${v.id}` , {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-            if (!res.ok) {
-              const err = await res.json().catch(() => ({}));
-              throw new Error(err?.message || 'Failed to update variant');
-            }
-          })
-        );
-      } else {
-        const stockQuantity = Number(editStock);
-        const lowStockLevel = Number(editMinLevel);
-        if (Number.isNaN(stockQuantity)) {
-          throw new Error('Invalid stock quantity');
-        }
-        const res = await fetch(`${API_BASE_URL}/api/inventory/${editingItem.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            stockQuantity,
-            lowStockLevel: Number.isNaN(lowStockLevel) ? undefined : lowStockLevel
-          })
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err?.message || 'Failed to update inventory');
-        }
-      }
-      await fetchInventory();
-      closeEdit();
-    } catch (e: any) {
-      setSaveError(e?.message || 'Failed to update inventory');
-    } finally {
-      setIsSaving(false);
-    }
   };
 
   const notifications = useMemo(() => {
@@ -189,7 +117,7 @@ export default function InventoryPage() {
   }, [inventory]);
 
   const filteredInventory = inventory.filter((item) =>
-    item.product?.toLowerCase().includes(search.toLowerCase())
+    String(item.product || '').toLowerCase().includes(search.toLowerCase())
   );
 
   useEffect(() => {
@@ -311,14 +239,23 @@ export default function InventoryPage() {
                             {item.status}
                           </Badge>
                         </td>
-                        <td className="px-4 py-2 text-[13px] font-semibold text-foreground">€ {Math.round(item.price * item.stock)}</td>
+                        <td className="px-4 py-2 text-[13px] font-semibold text-foreground">
+                          € {Math.round(item.totalValue ?? item.price * item.stock)}
+                        </td>
                         <td className="px-4 py-2 text-[13px]">
                           <Badge className={item.autoRestock ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' : 'bg-gray-50 text-gray-700 dark:bg-gray-900/20 dark:text-gray-400'}>
                             {item.autoRestock ? 'Enabled' : 'Disabled'}
                           </Badge>
                         </td>
                         <td className="px-4 py-2 text-[13px]">
-                          <Button variant="outline" size="sm" onClick={() => startEdit(item)}>Update</Button>
+                          <div className="flex items-center gap-2">
+                            <Link
+                              href={`/admin/inventory/${item.id}`}
+                              className="inline-flex items-center rounded-md border border-border px-3 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                            >
+                              View
+                            </Link>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -415,71 +352,9 @@ export default function InventoryPage() {
               </div>
             </div>
           )}
-
-          {editingItem && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-              <div className="w-full max-w-xl rounded-lg border border-border bg-card p-6 shadow-lg">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-foreground">Update Inventory</h2>
-                  <Button variant="ghost" size="sm" onClick={closeEdit}>Close</Button>
-                </div>
-                <div className="mt-4 space-y-4">
-                  <div className="text-sm text-muted-foreground">Product: <span className="text-foreground font-medium">{editingItem.product}</span></div>
-                  {editingItem.variants && editingItem.variants.length > 0 ? (
-                    <div className="space-y-3">
-                      {editingItem.variants.map((v: any) => (
-                        <div key={v.id} className="flex items-center gap-3">
-                          <div className="flex-1 text-sm">{v.name}</div>
-                          <input
-                            type="number"
-                            min="0"
-                            value={variantStocks[v.id] ?? ''}
-                            onChange={(e) => setVariantStocks((prev) => ({ ...prev, [v.id]: e.target.value }))}
-                            className="w-32 rounded-md border border-border bg-background px-3 py-2 text-sm"
-                            placeholder="Stock"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-muted-foreground">Stock Quantity</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={editStock}
-                          onChange={(e) => setEditStock(e.target.value)}
-                          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                          placeholder="Stock"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground">Low Stock Level</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={editMinLevel}
-                          onChange={(e) => setEditMinLevel(e.target.value)}
-                          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                          placeholder="Min level"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {saveError && <div className="text-sm text-red-600">{saveError}</div>}
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={closeEdit} disabled={isSaving}>Cancel</Button>
-                    <Button onClick={handleSave} disabled={isSaving}>
-                      {isSaving ? 'Saving...' : 'Save'}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </Suspense>
     </AdminLayout>
   );
 }
+

@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
 
 interface Subcategory {
@@ -36,6 +37,7 @@ interface Category {
   status?: string | null;
   description?: string | null;
   image?: string | null;
+  image_url?: string | null;
   sort_order?: number | null;
   subcategories: Subcategory[];
 }
@@ -47,6 +49,8 @@ export default function CategoriesPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editStatus, setEditStatus] = useState<'active' | 'inactive'>('active');
+  const [editImageUrl, setEditImageUrl] = useState<string>('');
+  const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -76,6 +80,7 @@ export default function CategoriesPage() {
     setEditingId(category.id);
     setEditName(category.name || '');
     setEditStatus((category.status || 'active').toLowerCase() === 'inactive' ? 'inactive' : 'active');
+    setEditImageUrl(category.image || category.image_url || '');
     setIsEditOpen(true);
   };
 
@@ -83,7 +88,51 @@ export default function CategoriesPage() {
     setEditingId(null);
     setEditName('');
     setEditStatus('active');
+    setEditImageUrl('');
     setIsEditOpen(false);
+  };
+
+  const handleEditImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast({
+        title: 'File too large',
+        description: 'Please upload an image smaller than 2 MB.',
+        variant: 'destructive',
+      });
+      event.currentTarget.value = '';
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      formDataUpload.append('fileName', file.name);
+      formDataUpload.append('contentType', file.type);
+      const response = await fetch(`${API_BASE_URL}/api/categories/upload`, {
+        method: 'POST',
+        body: formDataUpload,
+      });
+      const result = await response.json();
+      if (result.success) {
+        setEditImageUrl(result.data.publicUrl);
+        toast({
+          title: 'Success',
+          description: 'Image uploaded successfully.',
+        });
+      } else {
+        throw new Error(result.error || 'Upload failed');
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Image upload failed.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const saveEdit = async (category: Category) => {
@@ -105,7 +154,7 @@ export default function CategoriesPage() {
           name: nextName,
           slug: category.slug,
           description: category.description ?? null,
-          imageUrl: category.image ?? null,
+          imageUrl: editImageUrl || null,
           sortOrder: category.sort_order ?? undefined,
           status: editStatus
         }),
@@ -114,12 +163,13 @@ export default function CategoriesPage() {
       if (!result.success) throw new Error(result.error || 'Update failed');
       setCategories(prev =>
         prev.map(item =>
-          item.id === category.id ? { ...item, name: nextName, status: editStatus } : item
+          item.id === category.id ? { ...item, name: nextName, status: editStatus, image: editImageUrl || null } : item
         )
       );
       setEditingId(null);
       setEditName('');
       setEditStatus('active');
+      setEditImageUrl('');
       setIsEditOpen(false);
       toast({
         title: 'Success',
@@ -222,8 +272,12 @@ export default function CategoriesPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground overflow-hidden">
-                            {category.image ? (
-                              <img src={category.image} alt={category.name} className="h-full w-full object-cover" />
+                            {category.image || category.image_url ? (
+                              <img
+                                src={category.image || category.image_url || ''}
+                                alt={category.name}
+                                className="h-full w-full object-cover"
+                              />
                             ) : (
                               <span>{category.name?.split(' ').map((w: string) => w[0]).slice(0, 2).join('')}</span>
                             )}
@@ -298,6 +352,27 @@ export default function CategoriesPage() {
             <DialogTitle>Edit Category</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Category Image</label>
+              <div className="mb-3 w-full h-32 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
+                {editImageUrl ? (
+                  <img
+                    src={editImageUrl}
+                    alt="Category"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="text-xs text-muted-foreground">No image</div>
+                )}
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleEditImageUpload}
+                className="mt-1 text-sm"
+                disabled={isUploading}
+              />
+            </div>
             <label className="block text-sm font-medium text-foreground">Category Name</label>
             <input
               type="text"
@@ -324,9 +399,9 @@ export default function CategoriesPage() {
                 const category = categories.find((c) => c.id === editingId);
                 if (category) saveEdit(category);
               }}
-              disabled={isSaving || !editName.trim()}
+              disabled={isSaving || isUploading || !editName.trim()}
             >
-              {isSaving ? 'Saving...' : 'Save'}
+              {isSaving ? 'Saving...' : isUploading ? 'Uploading...' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>

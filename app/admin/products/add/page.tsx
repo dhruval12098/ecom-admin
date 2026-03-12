@@ -59,6 +59,7 @@ export default function AddProductPage() {
     stock: string;
     sku: string;
   }>>([]);
+  const [mainVariantIndex, setMainVariantIndex] = useState<number | null>(null);
 
   const [newVariant, setNewVariant] = useState({
     name: '',
@@ -138,17 +139,32 @@ export default function AddProductPage() {
         ...variants,
         { ...newVariant, id: Date.now().toString() }
       ]);
+      if (mainVariantIndex === null) {
+        setMainVariantIndex(variants.length);
+      }
       setNewVariant({ name: '', type: 'size', price: '', stock: '', sku: '' });
     }
   };
 
   const removeVariant = (id: string) => {
-    setVariants(variants.filter(v => v.id !== id));
+    const removedIndex = variants.findIndex(v => v.id === id);
+    const next = variants.filter(v => v.id !== id);
+    setVariants(next);
+    if (mainVariantIndex !== null) {
+      if (removedIndex === mainVariantIndex) {
+        setMainVariantIndex(next.length > 0 ? 0 : null);
+      } else if (removedIndex >= 0 && removedIndex < mainVariantIndex) {
+        setMainVariantIndex(mainVariantIndex - 1);
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.basePrice || !formData.subcategory) {
+    const selectedVariant =
+      formData.hasVariants && mainVariantIndex !== null ? variants[mainVariantIndex] : null;
+    const resolvedBasePrice = selectedVariant?.price ? String(selectedVariant.price) : formData.basePrice;
+    if (!formData.name || !resolvedBasePrice || !formData.subcategory) {
       toast({
         title: 'Error',
         description: 'Name, price, and subcategory are required.',
@@ -160,7 +176,7 @@ export default function AddProductPage() {
       if (isSaving) return;
       setIsSaving(true);
       const slug = slugify(formData.name);
-      const price = Number(formData.basePrice);
+      const price = Number(resolvedBasePrice);
       const discount = Number(formData.discount || 0);
       const resolvedTax = customTaxEnabled ? Number(customTaxRate || 0) : null;
       const response = await fetch(`${API_BASE_URL}/api/products`, {
@@ -293,9 +309,19 @@ export default function AddProductPage() {
     }
   };
 
+  useEffect(() => {
+    if (!formData.hasVariants) return;
+    if (variants.length === 0) return;
+    if (mainVariantIndex === null) {
+      setMainVariantIndex(0);
+    }
+  }, [formData.hasVariants, variants.length, mainVariantIndex]);
+
+  const pricingLocked = formData.hasVariants;
+
   return (
     <AdminLayout>
-      <div className="space-y-6 max-w-3xl">
+      <div className="space-y-6 max-w-6xl">
         {/* Header */}
         <div className="flex items-center gap-4">
           <Link href="/admin/products">
@@ -463,7 +489,7 @@ export default function AddProductPage() {
 
             {formData.hasVariants && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                Variants are enabled. Customers will see the variant prices; the base price above is used only as a fallback.
+                Variants are enabled. Pricing & stock fields are locked; the main price is taken from the selected variant.
               </div>
             )}
 
@@ -477,6 +503,7 @@ export default function AddProductPage() {
                 onChange={handleChange}
                 placeholder="250"
                 required
+                disabled={pricingLocked}
                 className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -489,6 +516,7 @@ export default function AddProductPage() {
                 value={formData.sku}
                 onChange={handleChange}
                 placeholder="SKU-001"
+                disabled={pricingLocked}
                 className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -505,6 +533,7 @@ export default function AddProductPage() {
                 step={1}
                 inputMode="numeric"
                 onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                disabled={pricingLocked}
                 className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -521,7 +550,7 @@ export default function AddProductPage() {
                   step={0.1}
                   inputMode="decimal"
                   onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-                  disabled={!customTaxEnabled}
+                  disabled={!customTaxEnabled || pricingLocked}
                   className="w-full px-4 py-2 rounded-md bg-muted/60 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none"
                 />
                 <div className="mt-2 flex items-center justify-between gap-2">
@@ -530,7 +559,7 @@ export default function AddProductPage() {
                   </p>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">Customize</span>
-                    <Switch checked={customTaxEnabled} onCheckedChange={setCustomTaxEnabled} />
+                    <Switch checked={customTaxEnabled} onCheckedChange={setCustomTaxEnabled} disabled={pricingLocked} />
                   </div>
                 </div>
               </div>
@@ -544,6 +573,7 @@ export default function AddProductPage() {
                   onChange={handleChange}
                   placeholder="100"
                   required
+                  disabled={pricingLocked}
                   className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
@@ -555,6 +585,7 @@ export default function AddProductPage() {
                 name="status"
                 value={formData.status}
                 onChange={handleChange}
+                disabled={pricingLocked}
                 className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="active">Active</option>
@@ -677,28 +708,55 @@ export default function AddProductPage() {
               </div>
 
               {variants.length > 0 && (
-                <div className="border border-border rounded-lg overflow-hidden">
+                <div className="border border-border rounded-lg overflow-hidden w-full">
                   <div className="bg-muted/30 px-4 py-2 flex items-center gap-2 text-sm font-medium text-foreground">
                     Added Variants ({variants.length})
                   </div>
-                  <div className="divide-y divide-border">
-                    {variants.map((variant) => (
-                      <div key={variant.id} className="px-4 py-3 flex items-center justify-between">
-                        <div className="flex-1">
-                          <p className="font-medium text-foreground">{variant.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            €{variant.price} • Stock: {variant.stock} • SKU: {variant.sku}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeVariant(variant.id)}
-                          className="text-destructive hover:text-destructive/80"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/30 text-muted-foreground">
+                        <tr>
+                          <th className="text-left font-medium px-4 py-2">Name</th>
+                          <th className="text-left font-medium px-4 py-2">Type</th>
+                          <th className="text-left font-medium px-4 py-2">Price</th>
+                          <th className="text-left font-medium px-4 py-2">Stock</th>
+                          <th className="text-left font-medium px-4 py-2">SKU</th>
+                          <th className="text-left font-medium px-4 py-2">Main Price</th>
+                          <th className="text-right font-medium px-4 py-2">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {variants.map((variant, index) => (
+                          <tr key={variant.id}>
+                            <td className="px-4 py-3">{variant.name || '-'}</td>
+                            <td className="px-4 py-3 capitalize">{variant.type || '-'}</td>
+                            <td className="px-4 py-3">EUR {variant.price || '-'}</td>
+                            <td className="px-4 py-3">{variant.stock || '-'}</td>
+                            <td className="px-4 py-3">{variant.sku || '-'}</td>
+                            <td className="px-4 py-3">
+                              <input
+                                type="radio"
+                                name="mainVariant"
+                                checked={mainVariantIndex === index}
+                                onChange={() => {
+                                  setMainVariantIndex(index);
+                                  setFormData((prev) => ({ ...prev, basePrice: String(variant.price || '') }));
+                                }}
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => removeVariant(variant.id)}
+                                className="text-destructive hover:text-destructive/80"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}

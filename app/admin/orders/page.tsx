@@ -7,6 +7,9 @@ import { Search, Filter, Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useToast } from '@/hooks/use-toast';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import Loading from './loading';
@@ -26,6 +29,9 @@ export default function OrdersPage() {
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 10;
+  const [activeTab, setActiveTab] = useState<'all' | 'cod'>('all');
+  const [isDeleting, setIsDeleting] = useState<number | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -72,6 +78,17 @@ export default function OrdersPage() {
     return { gateway: normalizeStatus(value), detail: '-' };
   };
 
+  const isCodOrder = (order: any) => {
+    const raw =
+      order?.payment_method ||
+      order?.paymentMethod ||
+      order?.payment_gateway ||
+      order?.method ||
+      '';
+    const value = String(raw).toLowerCase();
+    return value === 'cod' || value.includes('cash');
+  };
+
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       const matchesSearch =
@@ -94,12 +111,45 @@ export default function OrdersPage() {
     });
   }, [orders, search, statusFilter, priorityFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
-  const pagedOrders = filteredOrders.slice((page - 1) * pageSize, page * pageSize);
+  const codOrders = useMemo(
+    () => filteredOrders.filter((order) => isCodOrder(order)),
+    [filteredOrders]
+  );
+  const activeOrders = activeTab === 'cod' ? codOrders : filteredOrders;
+  const totalPages = Math.max(1, Math.ceil(activeOrders.length / pageSize));
+  const pagedOrders = activeOrders.slice((page - 1) * pageSize, page * pageSize);
 
   useEffect(() => {
     setPage(1);
   }, [search, statusFilter, priorityFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab]);
+
+  const handleDeleteCod = async (orderId: number) => {
+    try {
+      setIsDeleting(orderId);
+      const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}`, {
+        method: 'DELETE'
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to delete');
+      setOrders((prev) => prev.filter((o) => o.id !== orderId));
+      toast({
+        title: 'COD order deleted',
+        description: `Order #${orderId} removed successfully.`
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Delete failed',
+        description: err?.message || 'Failed to delete order',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsDeleting(null);
+    }
+  };
 
   return (
     <Suspense fallback={<Loading />}>
@@ -153,118 +203,263 @@ export default function OrdersPage() {
           </div>
 
           {/* Orders Table */}
-          <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-[11px]">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    <th className="px-4 py-2 text-left font-semibold text-foreground">Order ID</th>
-                    <th className="px-4 py-2 text-left font-semibold text-foreground">Customer</th>
-                    <th className="px-4 py-2 text-left font-semibold text-foreground">Amount</th>
-                    <th className="px-4 py-2 text-left font-semibold text-foreground">Status</th>
-                    <th className="px-4 py-2 text-left font-semibold text-foreground">Priority</th>
-                    <th className="px-4 py-2 text-left font-semibold text-foreground">Payment</th>
-                    <th className="px-4 py-2 text-left font-semibold text-foreground">Payment Mode</th>
-                    <th className="px-4 py-2 text-left font-semibold text-foreground">Date</th>
-                    <th className="px-4 py-2 text-left font-semibold text-foreground">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isLoadingOrders && (
-                    <tr>
-                      <td className="px-4 py-4 text-[11px] text-muted-foreground" colSpan={9}>
-                        Loading orders...
-                      </td>
-                    </tr>
-                  )}
-                  {!isLoadingOrders && ordersError && (
-                    <tr>
-                      <td className="px-4 py-4 text-[11px] text-destructive" colSpan={9}>
-                        {ordersError}
-                      </td>
-                    </tr>
-                  )}
-                  {!isLoadingOrders && !ordersError && filteredOrders.length === 0 && (
-                    <tr>
-                      <td className="px-4 py-4 text-[11px] text-muted-foreground" colSpan={9}>
-                        No orders found.
-                      </td>
-                    </tr>
-                  )}
-                  {!isLoadingOrders && !ordersError && pagedOrders.map((order) => (
-                    <tr key={order.id} className="border-b border-border hover:bg-muted/30">
-                      <td className="px-4 py-2 text-foreground whitespace-nowrap">{order.order_number || order.id}</td>
-                      <td className="px-4 py-2 text-foreground">{order.customer_name || '-'}</td>
-                      <td className="px-4 py-2 text-foreground whitespace-nowrap">{formatCurrency(Number(order.total_amount || 0))}</td>
-                      <td className="px-4 py-2">
-                        {(() => {
-                          const label = normalizeStatus(String(order.status || 'Pending'));
-                          return (
-                            <Badge className={statusColors[label] || statusColors.Pending}>
-                              {label}
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'all' | 'cod')}>
+            <TabsList className="bg-transparent p-0 gap-2">
+              <TabsTrigger
+                value="all"
+                className="data-[state=active]:bg-[#266000] data-[state=active]:text-white"
+              >
+                All Orders
+              </TabsTrigger>
+              <TabsTrigger
+                value="cod"
+                className="data-[state=active]:bg-[#266000] data-[state=active]:text-white"
+              >
+                COD Orders
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="all">
+              <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Order ID</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Customer</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Amount</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Status</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Priority</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Payment</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Payment Mode</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Date</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isLoadingOrders && (
+                        <tr>
+                          <td className="px-4 py-4 text-[11px] text-muted-foreground" colSpan={9}>
+                            Loading orders...
+                          </td>
+                        </tr>
+                      )}
+                      {!isLoadingOrders && ordersError && (
+                        <tr>
+                          <td className="px-4 py-4 text-[11px] text-destructive" colSpan={9}>
+                            {ordersError}
+                          </td>
+                        </tr>
+                      )}
+                      {!isLoadingOrders && !ordersError && filteredOrders.length === 0 && (
+                        <tr>
+                          <td className="px-4 py-4 text-[11px] text-muted-foreground" colSpan={9}>
+                            No orders found.
+                          </td>
+                        </tr>
+                      )}
+                      {!isLoadingOrders && !ordersError && pagedOrders.map((order) => (
+                        <tr key={order.id} className="border-b border-border hover:bg-muted/30">
+                          <td className="px-4 py-2 text-foreground whitespace-nowrap">{order.order_number || order.id}</td>
+                          <td className="px-4 py-2 text-foreground">{order.customer_name || '-'}</td>
+                          <td className="px-4 py-2 text-foreground whitespace-nowrap">{formatCurrency(Number(order.total_amount || 0))}</td>
+                          <td className="px-4 py-2">
+                            {(() => {
+                              const label = normalizeStatus(String(order.status || 'Pending'));
+                              return (
+                                <Badge className={statusColors[label] || statusColors.Pending}>
+                                  {label}
+                                </Badge>
+                              );
+                            })()}
+                          </td>
+                          <td className="px-4 py-2">
+                            {order.priority ? (
+                              <div className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
+                                <Star className="w-4 h-4 fill-current" />
+                                <span className="text-xs font-semibold">Flagged</span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Normal</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2">
+                            <Badge className={String(order.payment_status || '').toLowerCase() === 'paid' ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' : 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400'}>
+                              {normalizeStatus(String(order.payment_status || 'Pending'))}
                             </Badge>
-                          );
-                        })()}
-                      </td>
-                      <td className="px-4 py-2">
-                        {order.priority ? (
-                          <div className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
-                            <Star className="w-4 h-4 fill-current" />
-                            <span className="text-xs font-semibold">Flagged</span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Normal</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2">
-                        <Badge className={String(order.payment_status || '').toLowerCase() === 'paid' ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' : 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400'}>
-                          {normalizeStatus(String(order.payment_status || 'Pending'))}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2 text-foreground whitespace-nowrap">
-                        {(() => {
-                          const parts = splitPaymentMethod(
-                            order.payment_method || order.paymentMethod || order.method || order.payment_gateway,
-                            order.payment_brand,
-                            order.payment_method_type
-                          );
-                          return parts.detail !== '-' ? parts.detail : parts.gateway;
-                        })()}
-                      </td>
-                      <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">
-                        {order.created_at ? new Date(order.created_at).toLocaleDateString() : '-'}
-                      </td>
-                      <td className="px-4 py-2">
-                        <Link
-                          href={`/admin/orders/${order.id}`}
-                          className="inline-flex items-center gap-3 text-primary hover:text-primary/80 font-medium"
-                        >
-                          View
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex items-center justify-between px-6 py-3 border-t border-border">
-              <span className="text-xs text-muted-foreground">
-                Page {page} of {totalPages}
-              </span>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
-                  Prev
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                >
-                  Next
-                </Button>
+                          </td>
+                          <td className="px-4 py-2 text-foreground whitespace-nowrap">
+                            {(() => {
+                              const parts = splitPaymentMethod(
+                                order.payment_method || order.paymentMethod || order.method || order.payment_gateway,
+                                order.payment_brand,
+                                order.payment_method_type
+                              );
+                              return parts.detail !== '-' ? parts.detail : parts.gateway;
+                            })()}
+                          </td>
+                          <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">
+                            {order.created_at ? new Date(order.created_at).toLocaleDateString() : '-'}
+                          </td>
+                          <td className="px-4 py-2">
+                            <Link
+                              href={`/admin/orders/${order.id}`}
+                              className="inline-flex items-center gap-3 text-primary hover:text-primary/80 font-medium"
+                            >
+                              View
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center justify-between px-6 py-3 border-t border-border">
+                  <span className="text-xs text-muted-foreground">
+                    Page {page} of {totalPages}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
+                      Prev
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page === totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            </TabsContent>
+            <TabsContent value="cod">
+              <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Order ID</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Customer</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Amount</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Status</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Priority</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Payment</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Payment Mode</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Date</th>
+                        <th className="px-4 py-2 text-left font-semibold text-foreground">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isLoadingOrders && (
+                        <tr>
+                          <td className="px-4 py-4 text-[11px] text-muted-foreground" colSpan={9}>
+                            Loading orders...
+                          </td>
+                        </tr>
+                      )}
+                      {!isLoadingOrders && ordersError && (
+                        <tr>
+                          <td className="px-4 py-4 text-[11px] text-destructive" colSpan={9}>
+                            {ordersError}
+                          </td>
+                        </tr>
+                      )}
+                      {!isLoadingOrders && !ordersError && activeOrders.length === 0 && (
+                        <tr>
+                          <td className="px-4 py-4 text-[11px] text-muted-foreground" colSpan={9}>
+                            No COD orders found.
+                          </td>
+                        </tr>
+                      )}
+                      {!isLoadingOrders && !ordersError && pagedOrders.map((order) => (
+                        <tr key={order.id} className="border-b border-border hover:bg-muted/30">
+                          <td className="px-4 py-2 text-foreground whitespace-nowrap">{order.order_number || order.id}</td>
+                          <td className="px-4 py-2 text-foreground">{order.customer_name || '-'}</td>
+                          <td className="px-4 py-2 text-foreground whitespace-nowrap">{formatCurrency(Number(order.total_amount || 0))}</td>
+                          <td className="px-4 py-2">
+                            {(() => {
+                              const label = normalizeStatus(String(order.status || 'Pending'));
+                              return (
+                                <Badge className={statusColors[label] || statusColors.Pending}>
+                                  {label}
+                                </Badge>
+                              );
+                            })()}
+                          </td>
+                          <td className="px-4 py-2">
+                            {order.priority ? (
+                              <div className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
+                                <Star className="w-4 h-4 fill-current" />
+                                <span className="text-xs font-semibold">Flagged</span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Normal</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2">
+                            <Badge className={String(order.payment_status || '').toLowerCase() === 'paid' ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' : 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400'}>
+                              {normalizeStatus(String(order.payment_status || 'Pending'))}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-2 text-foreground whitespace-nowrap">
+                            {(() => {
+                              const parts = splitPaymentMethod(
+                                order.payment_method || order.paymentMethod || order.method || order.payment_gateway,
+                                order.payment_brand,
+                                order.payment_method_type
+                              );
+                              return parts.detail !== '-' ? parts.detail : parts.gateway;
+                            })()}
+                          </td>
+                          <td className="px-4 py-2 text-muted-foreground whitespace-nowrap">
+                            {order.created_at ? new Date(order.created_at).toLocaleDateString() : '-'}
+                          </td>
+                          <td className="px-4 py-2 flex items-center gap-3">
+                            <Link
+                              href={`/admin/orders/${order.id}`}
+                              className="inline-flex items-center gap-3 text-primary hover:text-primary/80 font-medium"
+                            >
+                              View
+                            </Link>
+                            <ConfirmDialog
+                              title={`Delete COD order #${order.order_number || order.id}?`}
+                              description={`Customer: ${order.customer_name || 'Unknown'}. This will permanently delete the order, its items, and payment record.`}
+                              confirmText={isDeleting === order.id ? 'Deleting...' : 'Delete'}
+                              confirmVariant="destructive"
+                              disabled={isDeleting === order.id}
+                              onConfirm={() => handleDeleteCod(order.id)}
+                              trigger={
+                                <Button variant="destructive" size="sm" disabled={isDeleting === order.id}>
+                                  {isDeleting === order.id ? 'Deleting...' : 'Delete'}
+                                </Button>
+                              }
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center justify-between px-6 py-3 border-t border-border">
+                  <span className="text-xs text-muted-foreground">
+                    Page {page} of {totalPages}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
+                      Prev
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page === totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
       </AdminLayout>
     </Suspense>
