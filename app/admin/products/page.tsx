@@ -145,24 +145,40 @@ export default function ProductsPage() {
           {/* Products Table */}
           <div className="bg-card border border-border rounded-lg overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full table-fixed">
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
-                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Product Name</th>
-                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Price</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground w-[28%]">Product Name</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground w-24 whitespace-nowrap">Price</th>
                     <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Category</th>
-                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Stock</th>
-                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Shipping</th>
-                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground">Actions</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground w-24 whitespace-nowrap">Stock</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground w-24 whitespace-nowrap">Shipping</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-foreground w-28">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pagedProducts.map((product) => (
                     <tr key={product.id} className="border-b border-border hover:bg-muted/30 transition">
-                      <td className="px-4 py-2 text-[13px] font-medium text-foreground">{product.name}</td>
-                      <td className="px-4 py-2 text-[13px] text-foreground">€ {product.price}</td>
-                      <td className="px-4 py-2 text-[13px] text-muted-foreground">{subcategoryLookup[String(product.subcategory_id)] || product.subcategory_id}</td>
-                      <td className="px-4 py-2 text-[13px] text-foreground">{product.in_stock ? 'In Stock' : 'Out of Stock'}</td>
+                      <td
+                        className="px-4 py-2 text-[13px] font-medium text-foreground"
+                        title={String(product.name || '')}
+                      >
+                        {(() => {
+                          const name = String(product.name || '');
+                          const wordCount = name.trim() ? name.trim().split(/\s+/).length : 0;
+                          const shouldTruncate = wordCount > 4;
+                          return (
+                            <div className={shouldTruncate ? 'truncate' : 'whitespace-nowrap'}>
+                              {name}
+                            </div>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-4 py-2 text-[13px] text-foreground whitespace-nowrap">€ {product.price}</td>
+                      <td className="px-4 py-2 text-[13px] text-muted-foreground">
+                        {subcategoryLookup[String(product.subcategory_id)] || product.subcategory_id}
+                      </td>
+                      <td className="px-4 py-2 text-[13px] text-foreground whitespace-nowrap">{product.in_stock ? 'In Stock' : 'Out of Stock'}</td>
                       <td className="px-4 py-2 text-[13px]">
                         <Badge
                           className={
