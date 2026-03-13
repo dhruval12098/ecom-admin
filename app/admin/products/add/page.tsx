@@ -61,6 +61,40 @@ export default function AddProductPage() {
   }>>([]);
   const [mainVariantIndex, setMainVariantIndex] = useState<number | null>(null);
 
+  const parseWeightToGrams = (label: string) => {
+    const raw = String(label || '').trim().toLowerCase();
+    const match = raw.match(/(\d+(?:\.\d+)?)\s*(kg|g)\b/);
+    if (!match) return null;
+    const value = Number(match[1]);
+    if (!Number.isFinite(value)) return null;
+    const unit = match[2];
+    return unit === 'kg' ? Math.round(value * 1000) : Math.round(value);
+  };
+
+  const sortVariantsForDisplay = <T extends { id: string; type: string; name: string }>(next: T[]) => {
+    const decorated = next.map((v, idx) => ({
+      v,
+      idx,
+      grams: v.type === 'weight' ? parseWeightToGrams(v.name) : null
+    }));
+    decorated.sort((a, b) => {
+      const aw = a.v.type === 'weight';
+      const bw = b.v.type === 'weight';
+      if (aw && bw) {
+        const ag = a.grams;
+        const bg = b.grams;
+        if (ag === null && bg === null) return a.idx - b.idx;
+        if (ag === null) return 1;
+        if (bg === null) return -1;
+        if (ag !== bg) return ag - bg;
+        return a.idx - b.idx;
+      }
+      if (aw !== bw) return aw ? -1 : 1;
+      return a.idx - b.idx;
+    });
+    return decorated.map((d) => d.v);
+  };
+
   const [newVariant, setNewVariant] = useState({
     name: '',
     type: 'size',
@@ -135,12 +169,17 @@ export default function AddProductPage() {
 
   const addVariant = () => {
     if (newVariant.name && newVariant.price && newVariant.stock) {
-      setVariants([
-        ...variants,
-        { ...newVariant, id: Date.now().toString() }
-      ]);
+      const createdId = Date.now().toString();
+      const selectedId =
+        mainVariantIndex !== null && variants[mainVariantIndex] ? variants[mainVariantIndex].id : null;
+      const next = sortVariantsForDisplay([...variants, { ...newVariant, id: createdId }]);
+      setVariants(next);
       if (mainVariantIndex === null) {
-        setMainVariantIndex(variants.length);
+        const idx = next.findIndex((v) => v.id === createdId);
+        setMainVariantIndex(idx >= 0 ? idx : 0);
+      } else if (selectedId) {
+        const idx = next.findIndex((v) => v.id === selectedId);
+        setMainVariantIndex(idx >= 0 ? idx : mainVariantIndex);
       }
       setNewVariant({ name: '', type: 'size', price: '', stock: '', sku: '' });
     }
@@ -215,8 +254,9 @@ export default function AddProductPage() {
         if (!imgJson.success) throw new Error(imgJson.error || 'Gallery save failed');
       }
       if (formData.hasVariants && variants.length > 0) {
-        for (let i = 0; i < variants.length; i += 1) {
-          const v = variants[i];
+        const sortedVariants = sortVariantsForDisplay(variants);
+        for (let i = 0; i < sortedVariants.length; i += 1) {
+          const v = sortedVariants[i];
           const varRes = await fetch(`${API_BASE_URL}/api/products/${productId}/variants`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

@@ -55,6 +55,7 @@ export default function EditProductPage() {
   const [didHydrateCategory, setDidHydrateCategory] = useState(false);
   type Variant = {
     id?: string;
+    clientId: string;
     name: string;
     type: string;
     price: string;
@@ -81,6 +82,40 @@ export default function EditProductPage() {
     stock: '',
     sku: '',
   });
+
+  const parseWeightToGrams = (label: string) => {
+    const raw = String(label || '').trim().toLowerCase();
+    const match = raw.match(/(\d+(?:\.\d+)?)\s*(kg|g)\b/);
+    if (!match) return null;
+    const value = Number(match[1]);
+    if (!Number.isFinite(value)) return null;
+    const unit = match[2];
+    return unit === 'kg' ? Math.round(value * 1000) : Math.round(value);
+  };
+
+  const sortVariantsForDisplay = <T extends { clientId: string; type: string; name: string }>(next: T[]) => {
+    const decorated = next.map((v, idx) => ({
+      v,
+      idx,
+      grams: v.type === 'weight' ? parseWeightToGrams(v.name) : null
+    }));
+    decorated.sort((a, b) => {
+      const aw = a.v.type === 'weight';
+      const bw = b.v.type === 'weight';
+      if (aw && bw) {
+        const ag = a.grams;
+        const bg = b.grams;
+        if (ag === null && bg === null) return a.idx - b.idx;
+        if (ag === null) return 1;
+        if (bg === null) return -1;
+        if (ag !== bg) return ag - bg;
+        return a.idx - b.idx;
+      }
+      if (aw !== bw) return aw ? -1 : 1;
+      return a.idx - b.idx;
+    });
+    return decorated.map((d) => d.v);
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -158,16 +193,18 @@ export default function EditProductPage() {
           setImageGallery(prod.imageGallery || []);
           const loadedVariants: Variant[] = (prod.variants || []).map((v: any) => ({
             id: String(v.id),
+            clientId: String(v.id),
             name: v.name || '',
             type: v.type || 'size',
             price: String(v.price || ''),
             stock: String(v.stockQuantity || 0),
             sku: v.sku || ''
           }));
-          setVariants(loadedVariants);
-          setFormData((prev) => ({ ...prev, hasVariants: loadedVariants.length > 0 }));
-          if (loadedVariants.length > 0) {
-            const priceMatchIndex = loadedVariants.findIndex(
+          const sorted = sortVariantsForDisplay(loadedVariants);
+          setVariants(sorted);
+          setFormData((prev) => ({ ...prev, hasVariants: sorted.length > 0 }));
+          if (sorted.length > 0) {
+            const priceMatchIndex = sorted.findIndex(
               (v) => String(v.price || '') === String(prod.price || '')
             );
             setMainVariantIndex(priceMatchIndex >= 0 ? priceMatchIndex : 0);
@@ -253,8 +290,9 @@ export default function EditProductPage() {
       const result = await response.json();
       if (!result.success) throw new Error(result.error || 'Update failed');
       if (formData.hasVariants && variants.length > 0) {
-        for (let i = 0; i < variants.length; i += 1) {
-          const v = variants[i];
+        const sortedVariants = sortVariantsForDisplay(variants);
+        for (let i = 0; i < sortedVariants.length; i += 1) {
+          const v = sortedVariants[i];
           if (v.id && !isNaN(Number(v.id))) {
             const varRes = await fetch(`${API_BASE_URL}/api/products/variants/${v.id}`, {
               method: 'PUT',
@@ -335,12 +373,20 @@ export default function EditProductPage() {
 
   const addVariant = () => {
     if (newVariant.name && newVariant.price) {
-      setVariants([
+      const createdClientId = `tmp_${Date.now()}`;
+      const selectedClientId =
+        mainVariantIndex !== null && variants[mainVariantIndex] ? variants[mainVariantIndex].clientId : null;
+      const next = sortVariantsForDisplay([
         ...variants,
-        { ...newVariant, id: undefined }
+        { ...newVariant, id: undefined, clientId: createdClientId }
       ]);
+      setVariants(next);
       if (mainVariantIndex === null) {
-        setMainVariantIndex(variants.length);
+        const idx = next.findIndex((v) => v.clientId === createdClientId);
+        setMainVariantIndex(idx >= 0 ? idx : 0);
+      } else if (selectedClientId) {
+        const idx = next.findIndex((v) => v.clientId === selectedClientId);
+        setMainVariantIndex(idx >= 0 ? idx : mainVariantIndex);
       }
       setNewVariant({ name: '', type: 'size', price: '', stock: '', sku: '' });
     }
@@ -379,9 +425,24 @@ export default function EditProductPage() {
 
   const updateVariant = (index: number, patch: Partial<typeof variants[number]>) => {
     setVariants((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], ...patch };
-      if (index === mainVariantIndex && patch.price !== undefined) {
+      const selectedClientId =
+        mainVariantIndex !== null && prev[mainVariantIndex] ? prev[mainVariantIndex].clientId : null;
+      const editedClientId = prev[index]?.clientId;
+      const wasEditingMain = index === mainVariantIndex;
+      const nextRaw = [...prev];
+      nextRaw[index] = { ...nextRaw[index], ...patch };
+      const next = sortVariantsForDisplay(nextRaw);
+      const nextMainIndex =
+        selectedClientId ? next.findIndex((v) => v.clientId === selectedClientId) : mainVariantIndex;
+      if (nextMainIndex !== null && nextMainIndex !== undefined && nextMainIndex >= 0) {
+        setMainVariantIndex(nextMainIndex);
+      }
+      if (wasEditingMain && patch.price !== undefined && editedClientId) {
+        const idx = next.findIndex((v) => v.clientId === editedClientId);
+        if (idx >= 0) {
+          setFormData((prevForm) => ({ ...prevForm, price: String(patch.price || '') }));
+        }
+      } else if (wasEditingMain && patch.price !== undefined) {
         setFormData((prevForm) => ({ ...prevForm, price: String(patch.price || '') }));
       }
       return next;
@@ -896,7 +957,7 @@ export default function EditProductPage() {
                       </thead>
                       <tbody className="divide-y divide-border">
                         {variants.map((variant, index) => (
-                          <tr key={variant.id || `${variant.name}-${index}`}>
+                          <tr key={variant.clientId}>
                             <td className="px-4 py-3">{variant.name || '-'}</td>
                             <td className="px-4 py-3 capitalize">{variant.type || '-'}</td>
                             <td className="px-4 py-3">EUR {variant.price || '-'}</td>

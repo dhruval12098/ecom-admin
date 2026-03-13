@@ -23,6 +23,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [subcategoryLookup, setSubcategoryLookup] = useState<Record<string, string>>({});
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [variantStockLookup, setVariantStockLookup] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -110,6 +111,55 @@ export default function ProductsPage() {
   const startIndex = (safePage - 1) * pageSize;
   const pagedProducts = filteredProducts.slice(startIndex, startIndex + pageSize);
 
+  const pagedIdsKey = pagedProducts.map((p) => String(p.id)).join(',');
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchVariantStock = async () => {
+      try {
+        const ids = pagedProducts
+          .map((p) => String(p.id))
+          .filter(Boolean);
+        if (ids.length === 0) return;
+        const results = await Promise.all(
+          ids.map(async (id) => {
+            try {
+              const res = await fetch(`${API_BASE_URL}/api/products/${id}/variants`);
+              const json = await res.json();
+              if (!json?.success || !Array.isArray(json?.data)) {
+                return [id, null] as const;
+              }
+              const variants = json.data as any[];
+              if (variants.length === 0) return [id, null] as const; // no variants: fallback to product stock
+              const inStock = variants.some((v) => Number(v?.stock_quantity ?? v?.stockQuantity ?? 0) > 0);
+              return [id, inStock] as const;
+            } catch {
+              return [id, null] as const;
+            }
+          })
+        );
+        if (cancelled) return;
+        setVariantStockLookup((prev) => {
+          const next = { ...prev };
+          results.forEach(([id, inStock]) => {
+            if (inStock === null) {
+              delete next[id];
+            } else {
+              next[id] = inStock;
+            }
+          });
+          return next;
+        });
+      } catch {
+        // ignore
+      }
+    };
+    fetchVariantStock();
+    return () => {
+      cancelled = true;
+    };
+  }, [pagedIdsKey]);
+
   return (
     <AdminLayout>
       <Suspense fallback={<Loading />}>
@@ -178,7 +228,16 @@ export default function ProductsPage() {
                       <td className="px-4 py-2 text-[13px] text-muted-foreground">
                         {subcategoryLookup[String(product.subcategory_id)] || product.subcategory_id}
                       </td>
-                      <td className="px-4 py-2 text-[13px] text-foreground whitespace-nowrap">{product.in_stock ? 'In Stock' : 'Out of Stock'}</td>
+                      <td className="px-4 py-2 text-[13px] text-foreground whitespace-nowrap">
+                        {(() => {
+                          const id = String(product.id);
+                          const variantStock = variantStockLookup[id];
+                          if (typeof variantStock === 'boolean') return variantStock ? 'In Stock' : 'Out of Stock';
+                          const baseQty = Number(product.stock_quantity ?? product.stockQuantity ?? 0);
+                          const baseInStock = Number.isFinite(baseQty) ? baseQty > 0 : Boolean(product.in_stock);
+                          return baseInStock ? 'In Stock' : 'Out of Stock';
+                        })()}
+                      </td>
                       <td className="px-4 py-2 text-[13px]">
                         <Badge
                           className={
