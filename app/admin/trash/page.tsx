@@ -175,7 +175,7 @@ const sourceLoaders: Record<SourceKey, () => Promise<Set<string>>> = {
   },
   categories: async () => {
     const data = await fetchJson(`${API_BASE_URL}/api/categories?includeInactive=true&includeEmpty=true`);
-    return loadUrlsFromData(data, ['image_url', 'imageUrl']);
+    return loadUrlsFromData(data, ['image', 'image_url', 'imageUrl']);
   },
   subcategories: async () => {
     const data = await fetchJson(`${API_BASE_URL}/api/subcategories`);
