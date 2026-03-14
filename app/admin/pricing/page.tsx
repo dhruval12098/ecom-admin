@@ -25,7 +25,7 @@ type Schedule = {
   status: string;
 };
 
-const formatCurrency = (value: number) => `€ ${Math.round(value)}`;
+const formatCurrency = (value: number) => `€ ${Number(value).toFixed(2)}`;
 
 const deriveStatus = (status: string, startAt: string, endAt: string) => {
   if (status === 'disabled') return 'Disabled';
@@ -222,4 +222,3 @@ export default function PricingPage() {
     </AdminLayout>
   );
 }
-

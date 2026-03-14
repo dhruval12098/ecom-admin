@@ -17,6 +17,7 @@ export default function EditCategoryPage({ params }: { params: { id: string } })
   const { toast } = useToast();
   const [formData, setFormData] = useState({
     name: 'Main Course',
+    slug: '',
     status: 'active',
     autoHideIfEmpty: false,
     hideIfOutOfStock: false,
@@ -75,6 +76,7 @@ export default function EditCategoryPage({ params }: { params: { id: string } })
             setFormData((prev) => ({
               ...prev,
               name: found.name || '',
+              slug: found.slug || '',
               status: found.status || 'active'
             }));
             setImageUrl(found.image || found.image_url || '');
@@ -102,7 +104,9 @@ export default function EditCategoryPage({ params }: { params: { id: string } })
       return;
     }
     try {
-      const slug = formData.name.toLowerCase().replace(/\s+/g, '-');
+      const slug = formData.slug?.trim()
+        ? formData.slug.trim()
+        : formData.name.toLowerCase().replace(/\s+/g, '-');
       const response = await fetch(`${API_BASE_URL}/api/categories/${params.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -218,21 +222,37 @@ export default function EditCategoryPage({ params }: { params: { id: string } })
             </div>
           </div>
 
-          {/* Category Information */}
           <div className="bg-card border border-border rounded-lg p-6 space-y-4">
-            <h2 className="text-lg font-semibold text-foreground">Category Information</h2>
-
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Category Name</label>
+              <label className="block text-sm font-semibold text-foreground mb-2">Category Name *</label>
               <input
                 type="text"
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-4 py-2 rounded-md bg-background border border-border"
               />
             </div>
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-2">Slug (optional)</label>
+              <input
+                type="text"
+                name="slug"
+                value={formData.slug}
+                onChange={handleChange}
+                placeholder="auto-generated from name if blank"
+                className="w-full px-4 py-2 rounded-md bg-background border border-border"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                Leave empty to auto-generate from the category name.
+              </p>
+            </div>
+          </div>
+
+          {/* Category Information */}
+          <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+            <h2 className="text-lg font-semibold text-foreground">Category Information</h2>
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Status</label>

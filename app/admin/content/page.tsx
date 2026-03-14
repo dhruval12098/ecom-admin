@@ -51,7 +51,8 @@ export default function ContentPage() {
   const [newTrend, setNewTrend] = useState({
     title: '',
     description: '',
-    imageUrl: ''
+    imageUrl: '',
+    linkUrl: ''
   });
   const [trendUploadError, setTrendUploadError] = useState('');
   const [uploadingTrendId, setUploadingTrendId] = useState<number | 'new' | null>(null);
@@ -468,13 +469,14 @@ export default function ContentPage() {
           title: newTrend.title,
           description: newTrend.description,
           imageUrl: newTrend.imageUrl,
+          linkUrl: newTrend.linkUrl || null,
           sortOrder: trends.length
         })
       });
       const result = await response.json();
       if (result.success) {
         setTrends(prev => [...prev, result.data]);
-        setNewTrend({ title: '', description: '', imageUrl: '' });
+        setNewTrend({ title: '', description: '', imageUrl: '', linkUrl: '' });
         setIsAddingTrend(false);
         toast({
           title: 'Success',
@@ -506,6 +508,7 @@ export default function ContentPage() {
           title: trend.title,
           description: trend.description,
           imageUrl: trend.image_url,
+          linkUrl: trend.link_url || null,
           sortOrder: trends.findIndex(t => t.id === trendId)
         })
       });
@@ -533,7 +536,8 @@ export default function ContentPage() {
       id: trend.id,
       title: trend.title || '',
       description: trend.description || '',
-      imageUrl: trend.image_url || ''
+      imageUrl: trend.image_url || '',
+      linkUrl: trend.link_url || ''
     });
     setIsEditingTrend(true);
   };
@@ -640,6 +644,7 @@ export default function ContentPage() {
           title: editTrend.title,
           description: editTrend.description,
           imageUrl: editTrend.imageUrl,
+          linkUrl: editTrend.linkUrl || null,
           sortOrder: trends.findIndex(t => t.id === editTrend.id)
         })
       });
@@ -647,7 +652,7 @@ export default function ContentPage() {
       if (!result.success) {
         throw new Error(result.error || 'Save failed');
       }
-      setTrends(prev => prev.map(t => t.id === editTrend.id ? { ...t, title: editTrend.title, description: editTrend.description, image_url: editTrend.imageUrl } : t));
+      setTrends(prev => prev.map(t => t.id === editTrend.id ? { ...t, title: editTrend.title, description: editTrend.description, image_url: editTrend.imageUrl, link_url: editTrend.linkUrl } : t));
       toast({
         title: 'Success',
         description: 'Trend updated successfully.',
@@ -970,6 +975,15 @@ export default function ContentPage() {
                       <p className="text-destructive text-sm mt-2">{trendUploadError}</p>
                     )}
                   </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-foreground mb-2">Link (optional)</label>
+                    <Input
+                      type="url"
+                      value={newTrend.linkUrl}
+                      onChange={(e) => setNewTrend({ ...newTrend, linkUrl: e.target.value })}
+                      placeholder="https://example.com/collection"
+                    />
+                  </div>
                   <div className="md:col-span-2 flex gap-2">
                     <Button className="bg-primary" onClick={handleAddTrend} disabled={savingTrendId === 'new'}>
                       {savingTrendId === 'new' ? 'Saving...' : 'Save Trend'}
@@ -992,52 +1006,20 @@ export default function ContentPage() {
                       className="w-32 h-24 rounded-lg object-cover"
                     />
                     <div className="flex-1">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs text-muted-foreground mb-1">Title</label>
-                          <Input
-                            value={trend.title || ''}
-                            onChange={(e) => setTrends(prev => prev.map(t => t.id === trend.id ? { ...t, title: e.target.value } : t))}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-muted-foreground mb-1">Description</label>
-                          <Textarea
-                            value={trend.description || ''}
-                            onChange={(e) => setTrends(prev => prev.map(t => t.id === trend.id ? { ...t, description: e.target.value } : t))}
-                            rows={2}
-                          />
-                        </div>
-                        <div className="md:col-span-2">
-                          <label className="block text-xs text-muted-foreground mb-1">Update Image</label>
-                          <Input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => handleTrendImageUpload(e, trend.id)}
-                            disabled={uploadingTrendId === trend.id}
-                          />
-                        </div>
+                      <div className="text-sm font-semibold text-foreground">{trend.title || 'Untitled'}</div>
+                      <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {trend.description || 'No description'}
                       </div>
                     </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1 bg-transparent"
-                          onClick={() => handleSaveTrend(trend.id)}
-                          disabled={savingTrendId === trend.id}
-                        >
-                          <Save className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1 bg-transparent"
-                          onClick={() => openEditTrend(trend)}
-                          disabled={savingTrendId === trend.id}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1 bg-transparent"
+                        onClick={() => openEditTrend(trend)}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
                       <Button 
                         variant="outline" 
                         size="sm"
@@ -1192,6 +1174,14 @@ export default function ContentPage() {
                     {trendUploadError && (
                       <p className="text-destructive text-sm mt-2">{trendUploadError}</p>
                     )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">Link (optional)</label>
+                    <Input
+                      value={editTrend.linkUrl}
+                      onChange={(e) => setEditTrend({ ...editTrend, linkUrl: e.target.value })}
+                      placeholder="https://example.com/collection"
+                    />
                   </div>
                 </div>
               )}

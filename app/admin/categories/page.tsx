@@ -48,6 +48,7 @@ export default function CategoriesPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editName, setEditName] = useState('');
+  const [editSlug, setEditSlug] = useState('');
   const [editStatus, setEditStatus] = useState<'active' | 'inactive'>('active');
   const [editImageUrl, setEditImageUrl] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
@@ -79,6 +80,7 @@ export default function CategoriesPage() {
   const startEdit = (category: Category) => {
     setEditingId(category.id);
     setEditName(category.name || '');
+    setEditSlug(category.slug || '');
     setEditStatus((category.status || 'active').toLowerCase() === 'inactive' ? 'inactive' : 'active');
     setEditImageUrl(category.image || category.image_url || '');
     setIsEditOpen(true);
@@ -87,6 +89,7 @@ export default function CategoriesPage() {
   const cancelEdit = () => {
     setEditingId(null);
     setEditName('');
+    setEditSlug('');
     setEditStatus('active');
     setEditImageUrl('');
     setIsEditOpen(false);
@@ -145,6 +148,9 @@ export default function CategoriesPage() {
       });
       return;
     }
+    const nextSlug = editSlug.trim()
+      ? editSlug.trim()
+      : nextName.toLowerCase().replace(/\s+/g, '-');
     setIsSaving(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/categories/${category.id}`, {
@@ -152,7 +158,7 @@ export default function CategoriesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: nextName,
-          slug: category.slug,
+          slug: nextSlug,
           description: category.description ?? null,
           imageUrl: editImageUrl || null,
           sortOrder: category.sort_order ?? undefined,
@@ -163,11 +169,14 @@ export default function CategoriesPage() {
       if (!result.success) throw new Error(result.error || 'Update failed');
       setCategories(prev =>
         prev.map(item =>
-          item.id === category.id ? { ...item, name: nextName, status: editStatus, image: editImageUrl || null } : item
+          item.id === category.id
+            ? { ...item, name: nextName, slug: nextSlug, status: editStatus, image: editImageUrl || null }
+            : item
         )
       );
       setEditingId(null);
       setEditName('');
+      setEditSlug('');
       setEditStatus('active');
       setEditImageUrl('');
       setIsEditOpen(false);
@@ -380,6 +389,19 @@ export default function CategoriesPage() {
               onChange={(e) => setEditName(e.target.value)}
               className="w-full text-sm px-3 py-2 rounded-md border border-border bg-background text-foreground"
             />
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Slug (optional)</label>
+              <input
+                type="text"
+                value={editSlug}
+                onChange={(e) => setEditSlug(e.target.value)}
+                placeholder="auto-generated from name if blank"
+                className="w-full text-sm px-3 py-2 rounded-md border border-border bg-background text-foreground"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Leave empty to auto-generate from the category name.
+              </p>
+            </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Status</label>
               <select

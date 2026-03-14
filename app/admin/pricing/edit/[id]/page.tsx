@@ -30,6 +30,7 @@ export default function EditPricingPage() {
   ];
   const [form, setForm] = useState({
     productId: '',
+    variantId: '',
     normalPrice: '',
     scheduledPrice: '',
     scheduleType: 'discount_campaign',
@@ -41,6 +42,7 @@ export default function EditPricingPage() {
   const [scheduleTypeOption, setScheduleTypeOption] = useState('discount_campaign');
   const [customScheduleType, setCustomScheduleType] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [variants, setVariants] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -58,6 +60,36 @@ export default function EditPricingPage() {
   }, []);
 
   useEffect(() => {
+    const loadVariants = async () => {
+      if (!form.productId) {
+        setVariants([]);
+        setForm((prev) => ({ ...prev, variantId: '' }));
+        return;
+      }
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/products/${form.productId}/variants`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setVariants(result.data);
+        } else {
+          setVariants([]);
+        }
+      } catch {
+        setVariants([]);
+      }
+    };
+    loadVariants();
+  }, [form.productId]);
+
+  useEffect(() => {
+    if (!form.variantId) return;
+    const selectedVariant = variants.find((v) => String(v.id) === String(form.variantId));
+    if (selectedVariant && selectedVariant.price !== undefined && selectedVariant.price !== null) {
+      setForm((prev) => ({ ...prev, normalPrice: String(selectedVariant.price) }));
+    }
+  }, [form.variantId, variants]);
+
+  useEffect(() => {
     const fetchSchedule = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/api/scheduled-pricing/${id}`);
@@ -68,6 +100,7 @@ export default function EditPricingPage() {
           const isCustomType = !scheduleTypeOptions.includes(existingType);
           setForm({
             productId: String(s.product_id),
+            variantId: s.variant_id ? String(s.variant_id) : '',
             normalPrice: String(s.normal_price || ''),
             scheduledPrice: String(s.scheduled_price || ''),
             scheduleType: existingType,
@@ -111,6 +144,7 @@ export default function EditPricingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           productId: Number(form.productId),
+          variantId: form.variantId ? Number(form.variantId) : null,
           normalPrice,
           scheduledPrice,
           discountPercent,
@@ -165,6 +199,27 @@ export default function EditPricingPage() {
               </SelectContent>
             </Select>
           </div>
+
+          {variants.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Variant</label>
+              <Select
+                value={form.variantId}
+                onValueChange={(value) => setForm((prev) => ({ ...prev, variantId: value }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a variant" />
+                </SelectTrigger>
+                <SelectContent>
+                  {variants.map((v) => (
+                    <SelectItem key={v.id} value={String(v.id)}>
+                      {v.name || v.type || `Variant ${v.id}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
