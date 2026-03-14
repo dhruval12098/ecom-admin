@@ -33,6 +33,7 @@ type HeroSlide = {
 type NewHeroSlide = {
   imageUrl: string;
   mobileImageUrl: string;
+  buttonLink: string;
 };
 
 export default function ContentPage() {
@@ -71,7 +72,8 @@ export default function ContentPage() {
   const [isAddingSlide, setIsAddingSlide] = useState(false);
   const [newSlide, setNewSlide] = useState<NewHeroSlide>({
     imageUrl: '',
-    mobileImageUrl: ''
+    mobileImageUrl: '',
+    buttonLink: ''
   });
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -262,7 +264,8 @@ export default function ContentPage() {
         },
         body: JSON.stringify({
           imageUrl: newSlide.imageUrl,
-          mobileImageUrl: newSlide.mobileImageUrl || null
+          mobileImageUrl: newSlide.mobileImageUrl || null,
+          buttonLink: newSlide.buttonLink || null
         }),
       });
 
@@ -282,7 +285,7 @@ export default function ContentPage() {
             imageUrlFullScreen: slide.image_url || slide.imageUrl,
             imageUrlSmallScreen: slide.mobile_image_url || slide.imageUrl || slide.image_url,
             buttonText: slide.button_text || slide.buttonText || 'Shop Now',
-            buttonLink: slide.button_link || slide.buttonLink || '/products'
+            buttonLink: slide.button_link || slide.link_url || slide.buttonLink || '/products'
           }));
           
           setHeroSliders(transformedSlides);
@@ -295,7 +298,8 @@ export default function ContentPage() {
         setIsAddingSlide(false);
         setNewSlide({
           imageUrl: '',
-          mobileImageUrl: ''
+          mobileImageUrl: '',
+          buttonLink: ''
         });
         setUploadError('');
       } else {
@@ -320,7 +324,8 @@ export default function ContentPage() {
     setIsAddingSlide(false);
     setNewSlide({
       imageUrl: '',
-      mobileImageUrl: ''
+      mobileImageUrl: '',
+      buttonLink: ''
     });
     setUploadError('');
     if (fileInputRef.current) {
@@ -346,7 +351,7 @@ export default function ContentPage() {
           imageUrlFullScreen: slide.image_url || slide.imageUrl,
           imageUrlSmallScreen: slide.mobile_image_url || slide.imageUrl || slide.image_url,
           buttonText: slide.button_text || slide.buttonText || 'Shop Now',
-          buttonLink: slide.button_link || slide.buttonLink || '/products'
+          buttonLink: slide.button_link || slide.link_url || slide.buttonLink || '/products'
         }));
         
         setHeroSliders(transformedSlides);
@@ -772,6 +777,21 @@ export default function ContentPage() {
                             />
                           </div>
                         )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="md:col-span-2">
+                        <Label>Banner Link (optional)</Label>
+                        <Input
+                          type="url"
+                          value={newSlide.buttonLink}
+                          onChange={(e) => setNewSlide((prev) => ({ ...prev, buttonLink: e.target.value }))}
+                          placeholder="https://example.com/collection"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          This link will open when the banner is clicked on the homepage.
+                        </p>
                       </div>
                     </div>
                     

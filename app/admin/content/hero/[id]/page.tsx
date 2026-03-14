@@ -18,6 +18,7 @@ type HeroSlide = {
   id: number;
   imageUrl: string;
   mobileImageUrl: string;
+  buttonLink?: string;
 };
 
 export default function EditHeroSlidePage() {
@@ -48,7 +49,8 @@ export default function EditHeroSlidePage() {
         setSlide({
           id: result.data.id,
           imageUrl: result.data.image_url || result.data.imageUrl || '',
-          mobileImageUrl: result.data.mobile_image_url || result.data.mobileImageUrl || ''
+          mobileImageUrl: result.data.mobile_image_url || result.data.mobileImageUrl || '',
+          buttonLink: result.data.button_link || result.data.link_url || ''
         });
       } catch (err: any) {
         setError(err?.message || 'Failed to load banner');
@@ -121,7 +123,8 @@ export default function EditHeroSlidePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageUrl: slide.imageUrl,
-          mobileImageUrl: slide.mobileImageUrl || null
+          mobileImageUrl: slide.mobileImageUrl || null,
+          buttonLink: slide.buttonLink || null
         })
       });
       const result = await response.json();
@@ -195,6 +198,18 @@ export default function EditHeroSlidePage() {
                   <img src={slide.mobileImageUrl} alt="Mobile preview" className="w-full h-48 rounded-lg object-cover border" />
                 )}
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Banner Link (optional)</Label>
+              <Input
+                type="url"
+                value={slide.buttonLink || ''}
+                onChange={(e) => setSlide((prev) => (prev ? { ...prev, buttonLink: e.target.value } : prev))}
+                placeholder="https://example.com/collection"
+              />
+              <p className="text-xs text-muted-foreground">
+                This link will open when the banner is clicked on the homepage.
+              </p>
             </div>
 
             {error && (
