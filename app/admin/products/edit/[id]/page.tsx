@@ -30,18 +30,19 @@ export default function EditProductPage() {
   const params = useParams<{ id: string }>();
   const productId = params?.id as string | undefined;
   const [formData, setFormData] = useState({
-    name: 'Butter Chicken',
-    description: 'Creamy and delicious butter chicken with aromatic spices',
-    price: '220',
-    discount: '10',
-    category: 'main-course',
+    name: '',
+    description: '',
+    price: '',
+    discount: '',
+    category: '',
     subcategory: '',
-    stock: '38',
+    stock: '',
     sku: '',
     status: 'active',
     shippingType: 'standard',
     hasVariants: false,
   });
+  const [isProductLoading, setIsProductLoading] = useState(true);
   const [primaryImage, setPrimaryImage] = useState('');
   const [imageGallery, setImageGallery] = useState<string[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -59,6 +60,7 @@ export default function EditProductPage() {
     name: string;
     type: string;
     price: string;
+    discount: string;
     stock: string;
     sku: string;
   };
@@ -71,6 +73,7 @@ export default function EditProductPage() {
     name: '',
     type: 'size',
     price: '',
+    discount: '',
     stock: '',
     sku: '',
   });
@@ -79,9 +82,28 @@ export default function EditProductPage() {
     name: '',
     type: 'size',
     price: '',
+    discount: '',
     stock: '',
     sku: '',
   });
+
+  const getVariantPricingPayload = (priceValue: string, discountValue: string) => {
+    const numericPrice = Number(priceValue || 0);
+    const numericDiscount = Number(discountValue || 0);
+    const hasDiscount = Number.isFinite(numericDiscount) && numericDiscount > 0;
+    return {
+      originalPrice: hasDiscount ? numericPrice + (numericPrice * numericDiscount / 100) : null,
+      discountPercentage: hasDiscount ? `${numericDiscount}% Off` : null,
+      discountColor: hasDiscount ? 'bg-red-500' : null
+    };
+  };
+  const calculateDiscountedPrice = (priceValue: string | number, discountValue: string | number) => {
+    const priceNum = Number(priceValue || 0);
+    const discountNum = Number(discountValue || 0);
+    if (!Number.isFinite(priceNum) || priceNum <= 0) return 0;
+    if (!Number.isFinite(discountNum) || discountNum <= 0) return priceNum;
+    return Math.max(0, priceNum - (priceNum * discountNum / 100));
+  };
 
   const parseWeightToGrams = (label: string) => {
     const raw = String(label || '').trim().toLowerCase();
@@ -163,6 +185,7 @@ export default function EditProductPage() {
     const fetchProduct = async () => {
       try {
         if (!productId) return;
+        setIsProductLoading(true);
         const response = await fetch(`${API_BASE_URL}/api/products/${productId}`);
         const result = await response.json();
         if (result.success && result.data) {
@@ -197,6 +220,12 @@ export default function EditProductPage() {
             name: v.name || '',
             type: v.type || 'size',
             price: String(v.price || ''),
+            discount: String(
+              Number(
+                String(v.discountPercentage || v.discount_percentage || '')
+                  .replace(/[^0-9.]/g, '')
+              ) || 0
+            ),
             stock: String(v.stockQuantity || 0),
             sku: v.sku || ''
           }));
@@ -204,10 +233,22 @@ export default function EditProductPage() {
           setVariants(sorted);
           setFormData((prev) => ({ ...prev, hasVariants: sorted.length > 0 }));
           if (sorted.length > 0) {
-            const priceMatchIndex = sorted.findIndex(
-              (v) => String(v.price || '') === String(prod.price || '')
-            );
-            setMainVariantIndex(priceMatchIndex >= 0 ? priceMatchIndex : 0);
+            const mainVariantIdRaw = prod.main_variant_id ?? prod.mainVariantId ?? null;
+            const mainVariantId =
+              mainVariantIdRaw !== null && mainVariantIdRaw !== undefined && !Number.isNaN(Number(mainVariantIdRaw))
+                ? Number(mainVariantIdRaw)
+                : null;
+            const mainByIdIndex = mainVariantId !== null
+              ? sorted.findIndex((v) => Number(v.id) === mainVariantId)
+              : -1;
+            if (mainByIdIndex >= 0) {
+              setMainVariantIndex(mainByIdIndex);
+            } else {
+              const priceMatchIndex = sorted.findIndex(
+                (v) => String(v.price || '') === String(prod.price || '')
+              );
+              setMainVariantIndex(priceMatchIndex >= 0 ? priceMatchIndex : 0);
+            }
           } else {
             setMainVariantIndex(null);
           }
@@ -218,6 +259,8 @@ export default function EditProductPage() {
           description: 'Failed to load product.',
           variant: 'destructive',
         });
+      } finally {
+        setIsProductLoading(false);
       }
     };
     fetchProduct();
@@ -266,6 +309,12 @@ export default function EditProductPage() {
       const price = Number(resolvedPriceValue);
       const discount = Number(formData.discount || 0);
       const resolvedTax = customTaxEnabled ? Number(customTaxRate || 0) : null;
+      const selectedMainVariant =
+        formData.hasVariants && mainVariantIndex !== null ? variants[mainVariantIndex] : null;
+      const preResolvedMainVariantId =
+        selectedMainVariant?.id && !Number.isNaN(Number(selectedMainVariant.id))
+          ? Number(selectedMainVariant.id)
+          : null;
       const response = await fetch(`${API_BASE_URL}/api/products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -275,24 +324,41 @@ export default function EditProductPage() {
           slug,
           description: formData.description,
           price,
-          originalPrice: discount > 0 ? price + (price * discount / 100) : null,
+          originalPrice: formData.hasVariants ? null : (discount > 0 ? price + (price * discount / 100) : null),
           imageUrl: primaryImage || null,
-          discountPercentage: discount > 0 ? `${discount}% Off` : null,
-          discountColor: discount > 0 ? 'bg-red-500' : null,
+          discountPercentage: formData.hasVariants ? null : (discount > 0 ? `${discount}% Off` : null),
+          discountColor: formData.hasVariants ? null : (discount > 0 ? 'bg-red-500' : null),
           inStock: Number(formData.stock || 0) > 0,
           stockQuantity: Number(formData.stock || 0),
           sku: formData.sku || null,
           taxPercent: resolvedTax,
           shippingMethod: formData.shippingType === 'free' ? 'free' : null,
+          mainVariantId: preResolvedMainVariantId,
           status: formData.status || 'active'
         })
       });
       const result = await response.json();
       if (!result.success) throw new Error(result.error || 'Update failed');
+      if (productId) {
+        const galleryToSave = imageGallery.map((url) => String(url || '').trim()).filter(Boolean);
+        const syncRes = await fetch(`${API_BASE_URL}/api/products/${productId}/images`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ images: galleryToSave })
+        });
+        const syncJson = await syncRes.json();
+        if (!syncJson.success) throw new Error(syncJson.error || 'Gallery sync failed');
+      }
       if (formData.hasVariants && variants.length > 0) {
         const sortedVariants = sortVariantsForDisplay(variants);
+        const selectedVariantClientId =
+          mainVariantIndex !== null && variants[mainVariantIndex]
+            ? variants[mainVariantIndex].clientId
+            : null;
+        let resolvedMainVariantId: number | null = preResolvedMainVariantId;
         for (let i = 0; i < sortedVariants.length; i += 1) {
           const v = sortedVariants[i];
+          const variantPricing = getVariantPricingPayload(v.price, v.discount);
           if (v.id && !isNaN(Number(v.id))) {
             const varRes = await fetch(`${API_BASE_URL}/api/products/variants/${v.id}`, {
               method: 'PUT',
@@ -301,6 +367,9 @@ export default function EditProductPage() {
                 name: v.name,
                 type: v.type,
                 price: Number(v.price),
+                originalPrice: variantPricing.originalPrice,
+                discountPercentage: variantPricing.discountPercentage,
+                discountColor: variantPricing.discountColor,
                 stockQuantity: Number(v.stock || 0),
                 sku: v.sku || null,
                 sortOrder: i
@@ -308,6 +377,10 @@ export default function EditProductPage() {
             });
             const varJson = await varRes.json();
             if (!varJson.success) throw new Error(varJson.error || 'Variant update failed');
+            if (!resolvedMainVariantId && selectedVariantClientId && v.clientId === selectedVariantClientId) {
+              const updatedVariantId = Number(v.id);
+              resolvedMainVariantId = Number.isFinite(updatedVariantId) ? updatedVariantId : null;
+            }
           } else {
             const varRes = await fetch(`${API_BASE_URL}/api/products/${productId}/variants`, {
               method: 'POST',
@@ -316,6 +389,9 @@ export default function EditProductPage() {
                 name: v.name,
                 type: v.type,
                 price: Number(v.price),
+                originalPrice: variantPricing.originalPrice,
+                discountPercentage: variantPricing.discountPercentage,
+                discountColor: variantPricing.discountColor,
                 stockQuantity: Number(v.stock || 0),
                 sku: v.sku || null,
                 sortOrder: i
@@ -323,9 +399,40 @@ export default function EditProductPage() {
             });
             const varJson = await varRes.json();
             if (!varJson.success) throw new Error(varJson.error || 'Variant create failed');
+            if (selectedVariantClientId && v.clientId === selectedVariantClientId) {
+              const createdVariantId = Number(varJson?.data?.id);
+              resolvedMainVariantId = Number.isFinite(createdVariantId) ? createdVariantId : resolvedMainVariantId;
+            }
           }
         }
-      }
+
+        if (resolvedMainVariantId !== preResolvedMainVariantId) {
+          const setMainRes = await fetch(`${API_BASE_URL}/api/products/${productId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              subcategoryId: Number(formData.subcategory),
+              name: formData.name,
+              slug,
+              description: formData.description,
+              price,
+              originalPrice: formData.hasVariants ? null : (discount > 0 ? price + (price * discount / 100) : null),
+              imageUrl: primaryImage || null,
+              discountPercentage: formData.hasVariants ? null : (discount > 0 ? `${discount}% Off` : null),
+              discountColor: formData.hasVariants ? null : (discount > 0 ? 'bg-red-500' : null),
+              inStock: Number(formData.stock || 0) > 0,
+              stockQuantity: Number(formData.stock || 0),
+              sku: formData.sku || null,
+              taxPercent: resolvedTax,
+              shippingMethod: formData.shippingType === 'free' ? 'free' : null,
+              mainVariantId: resolvedMainVariantId,
+              status: formData.status || 'active'
+            })
+          });
+          const setMainJson = await setMainRes.json();
+          if (!setMainJson.success) throw new Error(setMainJson.error || 'Failed to set main variant');
+          }
+        }
       toast({
         title: 'Success',
         description: 'Product updated successfully.',
@@ -388,7 +495,7 @@ export default function EditProductPage() {
         const idx = next.findIndex((v) => v.clientId === selectedClientId);
         setMainVariantIndex(idx >= 0 ? idx : mainVariantIndex);
       }
-      setNewVariant({ name: '', type: 'size', price: '', stock: '', sku: '' });
+      setNewVariant({ name: '', type: 'size', price: '', discount: '', stock: '', sku: '' });
     }
   };
 
@@ -457,6 +564,7 @@ export default function EditProductPage() {
       name: v.name || '',
       type: v.type || 'size',
       price: v.price || '',
+      discount: v.discount || '',
       stock: v.stock || '',
       sku: v.sku || '',
     });
@@ -468,6 +576,9 @@ export default function EditProductPage() {
     updateVariant(editVariantIndex, { ...editVariantDraft });
     setIsEditVariantOpen(false);
   };
+  const productDiscountedPrice = calculateDiscountedPrice(formData.price, formData.discount);
+  const newVariantDiscountedPrice = calculateDiscountedPrice(newVariant.price, newVariant.discount);
+  const editVariantDiscountedPrice = calculateDiscountedPrice(editVariantDraft.price, editVariantDraft.discount);
 
   const uploadGalleryImage = async (file: File, index: number) => {
     if (file.size > MAX_UPLOAD_BYTES) {
@@ -492,20 +603,6 @@ export default function EditProductPage() {
           next[index] = imageUrl;
           return next;
         });
-        if (productId) {
-          const saveRes = await fetch(`${API_BASE_URL}/api/products/${productId}/images`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              imageUrl,
-              sortOrder: index
-            })
-          });
-          const saveJson = await saveRes.json();
-          if (!saveJson.success) {
-            throw new Error(saveJson.error || 'Failed to save gallery image');
-          }
-        }
         toast({ title: 'Success', description: 'Gallery image uploaded.' });
       } else {
         throw new Error(result.error || 'Upload failed');
@@ -524,7 +621,14 @@ export default function EditProductPage() {
   };
 
   const removeImageSlot = (index: number) => {
-    setImageGallery(prev => prev.filter((_, i) => i !== index));
+    setImageGallery(prev => {
+      const removed = prev[index];
+      const next = prev.filter((_, i) => i !== index);
+      if (removed && primaryImage === removed) {
+        setPrimaryImage('');
+      }
+      return next;
+    });
   };
 
   const pricingLocked = formData.hasVariants;
@@ -534,11 +638,11 @@ export default function EditProductPage() {
       <div className="space-y-6 max-w-6xl">
         {/* Header */}
         <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Link href="/admin/products">
-              <Button variant="outline" size="icon">
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
+        <div className="flex items-center gap-4">
+          <Link href="/admin/products">
+            <Button variant="outline" size="icon">
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
             </Link>
             <div>
               <h1 className="text-3xl font-semibold text-foreground">Edit Product</h1>
@@ -554,6 +658,12 @@ export default function EditProductPage() {
             </Link>
           </div>
         </div>
+
+        {isProductLoading && (
+          <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+            Loading product details...
+          </div>
+        )}
 
         {/* Form */}
         <form id="edit-product-form" onSubmit={handleSubmit} className="space-y-6">
@@ -732,9 +842,12 @@ export default function EditProductPage() {
                       onChange={handleChange}
                       placeholder="SKU-001"
                       disabled={pricingLocked}
-                      className="w-full px-4 py-2.5 rounded-md bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
+                        className="w-full px-4 py-2.5 rounded-md bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Discounted Price: <span className="font-semibold text-foreground">EUR {productDiscountedPrice.toFixed(2)}</span>
+                      </p>
+                    </div>
                 </div>
 
                 <div>
@@ -788,20 +901,32 @@ export default function EditProductPage() {
                     <div className="text-sm text-muted-foreground">No image</div>
                   )}
                 </div>
-                {!primaryImage && (
-                  <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:bg-muted/50 transition cursor-pointer">
-                    <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm font-medium text-foreground">Upload image</p>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) uploadMainImage(f);
-                      }}
-                      className="mt-3"
-                      disabled={isUploading}
-                    />
+                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:bg-muted/50 transition cursor-pointer">
+                  <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm font-medium text-foreground">
+                    {primaryImage ? 'Replace main image' : 'Upload image'}
+                  </p>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadMainImage(f);
+                    }}
+                    className="mt-3"
+                    disabled={isUploading}
+                  />
+                </div>
+                {primaryImage && (
+                  <div className="mt-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="bg-transparent"
+                      onClick={() => setPrimaryImage('')}
+                    >
+                      Remove Main Image
+                    </Button>
                   </div>
                 )}
               </div>
@@ -828,16 +953,19 @@ export default function EditProductPage() {
                       )}
                     </div>
                     <div className="flex-1">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) uploadGalleryImage(f, index);
-                        }}
-                        className="w-full"
-                        disabled={isUploading}
-                      />
+                      <label className={`inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md shadow-none border border-gray-300 ${isUploading ? 'bg-slate-200/70 text-black cursor-not-allowed' : 'bg-slate-200 text-black cursor-pointer'}`}>
+                        {isUploading ? 'Uploading...' : url ? 'Edit Image' : 'Choose File'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) uploadGalleryImage(f, index);
+                          }}
+                          className="hidden"
+                          disabled={isUploading}
+                        />
+                      </label>
                       <p className="text-xs text-muted-foreground mt-1">Upload image for slot {index + 1}</p>
                     </div>
                     <ConfirmDialog
@@ -893,7 +1021,7 @@ export default function EditProductPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-4 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-foreground mb-1">Price (EUR)</label>
                     <input
@@ -901,6 +1029,17 @@ export default function EditProductPage() {
                       value={newVariant.price}
                       onChange={(e) => setNewVariant({ ...newVariant, price: e.target.value })}
                       placeholder="Price"
+                      className="w-full px-3 py-1.5 text-sm rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-foreground mb-1">Discount (%)</label>
+                    <input
+                      type="number"
+                      value={newVariant.discount}
+                      onChange={(e) => setNewVariant({ ...newVariant, discount: e.target.value })}
+                      placeholder="0"
+                      min={0}
                       className="w-full px-3 py-1.5 text-sm rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
@@ -925,6 +1064,9 @@ export default function EditProductPage() {
                     />
                   </div>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Discounted Price: <span className="font-semibold text-foreground">EUR {newVariantDiscountedPrice.toFixed(2)}</span>
+                </p>
 
                 <Button
                   type="button"
@@ -949,6 +1091,8 @@ export default function EditProductPage() {
                           <th className="text-left font-medium px-4 py-2">Name</th>
                           <th className="text-left font-medium px-4 py-2">Type</th>
                           <th className="text-left font-medium px-4 py-2">Price</th>
+                          <th className="text-left font-medium px-4 py-2">Discount</th>
+                          <th className="text-left font-medium px-4 py-2">Discounted Price</th>
                           <th className="text-left font-medium px-4 py-2">Stock</th>
                           <th className="text-left font-medium px-4 py-2">SKU</th>
                           <th className="text-left font-medium px-4 py-2">Main Price</th>
@@ -961,6 +1105,8 @@ export default function EditProductPage() {
                             <td className="px-4 py-3">{variant.name || '-'}</td>
                             <td className="px-4 py-3 capitalize">{variant.type || '-'}</td>
                             <td className="px-4 py-3">EUR {variant.price || '-'}</td>
+                            <td className="px-4 py-3">{variant.discount ? `${variant.discount}%` : '-'}</td>
+                            <td className="px-4 py-3">EUR {calculateDiscountedPrice(variant.price, variant.discount).toFixed(2)}</td>
                             <td className="px-4 py-3">{variant.stock || '-'}</td>
                             <td className="px-4 py-3">{variant.sku || '-'}</td>
                             <td className="px-4 py-3">
@@ -1042,6 +1188,19 @@ export default function EditProductPage() {
                     onChange={(e) => setEditVariantDraft((prev) => ({ ...prev, price: e.target.value }))}
                     className="w-full px-3 py-2 text-sm rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-foreground mb-1">Discount (%)</label>
+                  <input
+                    type="number"
+                    value={editVariantDraft.discount}
+                    min={0}
+                    onChange={(e) => setEditVariantDraft((prev) => ({ ...prev, discount: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Discounted Price: <span className="font-semibold text-foreground">EUR {editVariantDiscountedPrice.toFixed(2)}</span>
+                  </p>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-foreground mb-1">Stock</label>

@@ -56,6 +56,7 @@ export default function AddProductPage() {
     name: string;
     type: string;
     price: string;
+    discount: string;
     stock: string;
     sku: string;
   }>>([]);
@@ -99,9 +100,28 @@ export default function AddProductPage() {
     name: '',
     type: 'size',
     price: '',
+    discount: '',
     stock: '',
     sku: '',
   });
+
+  const getVariantPricingPayload = (priceValue: string, discountValue: string) => {
+    const numericPrice = Number(priceValue || 0);
+    const numericDiscount = Number(discountValue || 0);
+    const hasDiscount = Number.isFinite(numericDiscount) && numericDiscount > 0;
+    return {
+      originalPrice: hasDiscount ? numericPrice + (numericPrice * numericDiscount / 100) : null,
+      discountPercentage: hasDiscount ? `${numericDiscount}% Off` : null,
+      discountColor: hasDiscount ? 'bg-red-500' : null
+    };
+  };
+  const calculateDiscountedPrice = (priceValue: string | number, discountValue: string | number) => {
+    const priceNum = Number(priceValue || 0);
+    const discountNum = Number(discountValue || 0);
+    if (!Number.isFinite(priceNum) || priceNum <= 0) return 0;
+    if (!Number.isFinite(discountNum) || discountNum <= 0) return priceNum;
+    return Math.max(0, priceNum - (priceNum * discountNum / 100));
+  };
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -149,7 +169,12 @@ export default function AddProductPage() {
   };
 
   const removeImage = (index: number) => {
-    setImageGallery(imageGallery.filter((_, i) => i !== index));
+    const removed = imageGallery[index];
+    const next = imageGallery.filter((_, i) => i !== index);
+    setImageGallery(next);
+    if (removed && primaryImage === removed) {
+      setPrimaryImage('');
+    }
   };
 
   const updateImage = (index: number, url: string) => {
@@ -181,7 +206,7 @@ export default function AddProductPage() {
         const idx = next.findIndex((v) => v.id === selectedId);
         setMainVariantIndex(idx >= 0 ? idx : mainVariantIndex);
       }
-      setNewVariant({ name: '', type: 'size', price: '', stock: '', sku: '' });
+      setNewVariant({ name: '', type: 'size', price: '', discount: '', stock: '', sku: '' });
     }
   };
 
@@ -227,15 +252,16 @@ export default function AddProductPage() {
           slug,
           description: formData.description,
           price,
-          originalPrice: discount > 0 ? price + (price * discount / 100) : null,
+          originalPrice: formData.hasVariants ? null : (discount > 0 ? price + (price * discount / 100) : null),
           imageUrl: primaryImage || null,
-          discountPercentage: discount > 0 ? `${discount}% Off` : null,
-          discountColor: discount > 0 ? 'bg-red-500' : null,
+          discountPercentage: formData.hasVariants ? null : (discount > 0 ? `${discount}% Off` : null),
+          discountColor: formData.hasVariants ? null : (discount > 0 ? 'bg-red-500' : null),
           inStock: Number(formData.stock || 0) > 0,
           stockQuantity: Number(formData.stock || 0),
           sku: formData.sku || null,
           taxPercent: resolvedTax,
           shippingMethod: formData.shippingType === 'free' ? 'free' : null,
+          mainVariantId: null,
           status: formData.status || 'active',
           weight: null,
           origin: null
@@ -255,8 +281,14 @@ export default function AddProductPage() {
       }
       if (formData.hasVariants && variants.length > 0) {
         const sortedVariants = sortVariantsForDisplay(variants);
+        const selectedVariantKey =
+          mainVariantIndex !== null && sortedVariants[mainVariantIndex]
+            ? sortedVariants[mainVariantIndex].id
+            : null;
+        let resolvedMainVariantId: number | null = null;
         for (let i = 0; i < sortedVariants.length; i += 1) {
           const v = sortedVariants[i];
+          const variantPricing = getVariantPricingPayload(v.price, v.discount);
           const varRes = await fetch(`${API_BASE_URL}/api/products/${productId}/variants`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -264,6 +296,9 @@ export default function AddProductPage() {
               name: v.name,
               type: v.type,
               price: Number(v.price),
+              originalPrice: variantPricing.originalPrice,
+              discountPercentage: variantPricing.discountPercentage,
+              discountColor: variantPricing.discountColor,
               stockQuantity: Number(v.stock || 0),
               sku: v.sku || null,
               sortOrder: i
@@ -271,6 +306,39 @@ export default function AddProductPage() {
           });
           const varJson = await varRes.json();
           if (!varJson.success) throw new Error(varJson.error || 'Variant save failed');
+          if (selectedVariantKey && v.id === selectedVariantKey) {
+            const createdVariantId = Number(varJson?.data?.id);
+            resolvedMainVariantId = Number.isFinite(createdVariantId) ? createdVariantId : null;
+          }
+        }
+
+        if (resolvedMainVariantId !== null) {
+          const setMainRes = await fetch(`${API_BASE_URL}/api/products/${productId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              subcategoryId: Number(formData.subcategory),
+              name: formData.name,
+              slug,
+              description: formData.description,
+              price,
+              originalPrice: formData.hasVariants ? null : (discount > 0 ? price + (price * discount / 100) : null),
+              imageUrl: primaryImage || null,
+              discountPercentage: formData.hasVariants ? null : (discount > 0 ? `${discount}% Off` : null),
+              discountColor: formData.hasVariants ? null : (discount > 0 ? 'bg-red-500' : null),
+              inStock: Number(formData.stock || 0) > 0,
+              stockQuantity: Number(formData.stock || 0),
+              sku: formData.sku || null,
+              taxPercent: resolvedTax,
+              shippingMethod: formData.shippingType === 'free' ? 'free' : null,
+              mainVariantId: resolvedMainVariantId,
+              status: formData.status || 'active',
+              weight: null,
+              origin: null
+            })
+          });
+          const setMainJson = await setMainRes.json();
+          if (!setMainJson.success) throw new Error(setMainJson.error || 'Failed to set main variant');
         }
       }
       toast({
@@ -358,6 +426,8 @@ export default function AddProductPage() {
   }, [formData.hasVariants, variants.length, mainVariantIndex]);
 
   const pricingLocked = formData.hasVariants;
+  const productDiscountedPrice = calculateDiscountedPrice(formData.basePrice, formData.discount);
+  const newVariantDiscountedPrice = calculateDiscountedPrice(newVariant.price, newVariant.discount);
 
   return (
     <AdminLayout>
@@ -389,21 +459,35 @@ export default function AddProductPage() {
                 />
               </div>
             )}
-            {!primaryImage && (
-              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:bg-muted/50 transition cursor-pointer relative">
-                <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm font-medium text-foreground">Drag and drop your image here</p>
-                <p className="text-xs text-muted-foreground mt-1">or click to select</p>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) uploadMainImage(f);
-                  }}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  disabled={isUploading}
-                />
+            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:bg-muted/50 transition cursor-pointer relative">
+              <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm font-medium text-foreground">
+                {primaryImage ? 'Replace main image' : 'Drag and drop your image here'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {primaryImage ? 'or click to choose another file' : 'or click to select'}
+              </p>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) uploadMainImage(f);
+                }}
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                disabled={isUploading}
+              />
+            </div>
+            {primaryImage && (
+              <div className="mt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="bg-transparent"
+                  onClick={() => setPrimaryImage('')}
+                >
+                  Remove Main Image
+                </Button>
               </div>
             )}
           </div>
@@ -431,7 +515,7 @@ export default function AddProductPage() {
                 </div>
                 <div className="flex-1">
                     <label className={`inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-md shadow-none border border-gray-300 ${uploadingSlot === index ? 'bg-slate-200/70 text-black cursor-not-allowed' : 'bg-slate-200 text-black cursor-pointer'}`}>
-                    {uploadingSlot === index ? 'Uploading...' : url ? 'Replace Image' : 'Choose File'}
+                    {uploadingSlot === index ? 'Uploading...' : url ? 'Edit Image' : 'Choose File'}
                     <input
                       type="file"
                       accept="image/*"
@@ -577,6 +661,11 @@ export default function AddProductPage() {
                 className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
+            <div className="col-span-2">
+              <p className="text-sm text-muted-foreground">
+                Discounted Price: <span className="font-semibold text-foreground">EUR {productDiscountedPrice.toFixed(2)}</span>
+              </p>
+            </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -703,7 +792,7 @@ export default function AddProductPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-4 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-foreground mb-1">Price (€)</label>
                     <input
@@ -711,6 +800,17 @@ export default function AddProductPage() {
                       value={newVariant.price}
                       onChange={(e) => setNewVariant({ ...newVariant, price: e.target.value })}
                       placeholder="Price"
+                      className="w-full px-3 py-1.5 text-sm rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-foreground mb-1">Discount (%)</label>
+                    <input
+                      type="number"
+                      value={newVariant.discount}
+                      onChange={(e) => setNewVariant({ ...newVariant, discount: e.target.value })}
+                      placeholder="0"
+                      min={0}
                       className="w-full px-3 py-1.5 text-sm rounded-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
@@ -735,6 +835,9 @@ export default function AddProductPage() {
                     />
                   </div>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Discounted Price: <span className="font-semibold text-foreground">EUR {newVariantDiscountedPrice.toFixed(2)}</span>
+                </p>
 
                 <Button
                   type="button"
@@ -759,6 +862,8 @@ export default function AddProductPage() {
                           <th className="text-left font-medium px-4 py-2">Name</th>
                           <th className="text-left font-medium px-4 py-2">Type</th>
                           <th className="text-left font-medium px-4 py-2">Price</th>
+                          <th className="text-left font-medium px-4 py-2">Discount</th>
+                          <th className="text-left font-medium px-4 py-2">Discounted Price</th>
                           <th className="text-left font-medium px-4 py-2">Stock</th>
                           <th className="text-left font-medium px-4 py-2">SKU</th>
                           <th className="text-left font-medium px-4 py-2">Main Price</th>
@@ -771,6 +876,8 @@ export default function AddProductPage() {
                             <td className="px-4 py-3">{variant.name || '-'}</td>
                             <td className="px-4 py-3 capitalize">{variant.type || '-'}</td>
                             <td className="px-4 py-3">EUR {variant.price || '-'}</td>
+                            <td className="px-4 py-3">{variant.discount ? `${variant.discount}%` : '-'}</td>
+                            <td className="px-4 py-3">EUR {calculateDiscountedPrice(variant.price, variant.discount).toFixed(2)}</td>
                             <td className="px-4 py-3">{variant.stock || '-'}</td>
                             <td className="px-4 py-3">{variant.sku || '-'}</td>
                             <td className="px-4 py-3">

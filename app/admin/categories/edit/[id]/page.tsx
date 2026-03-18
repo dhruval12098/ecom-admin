@@ -8,6 +8,7 @@ import { ArrowLeft, Upload, ChevronUp, ChevronDown, GripVertical } from 'lucide-
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { slugify } from '@/lib/slugify';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
@@ -105,8 +106,8 @@ export default function EditCategoryPage({ params }: { params: { id: string } })
     }
     try {
       const slug = formData.slug?.trim()
-        ? formData.slug.trim()
-        : formData.name.toLowerCase().replace(/\s+/g, '-');
+        ? slugify(formData.slug.trim())
+        : slugify(formData.name);
       const response = await fetch(`${API_BASE_URL}/api/categories/${params.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

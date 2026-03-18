@@ -6,6 +6,7 @@ import { Plus, Pencil, Trash2, TriangleAlert } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { slugify } from '@/lib/slugify';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -149,8 +150,8 @@ export default function CategoriesPage() {
       return;
     }
     const nextSlug = editSlug.trim()
-      ? editSlug.trim()
-      : nextName.toLowerCase().replace(/\s+/g, '-');
+      ? slugify(editSlug.trim())
+      : slugify(nextName);
     setIsSaving(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/categories/${category.id}`, {

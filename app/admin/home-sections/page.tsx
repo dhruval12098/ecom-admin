@@ -10,7 +10,9 @@ import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/currency";
+import { useToast } from "@/hooks/use-toast";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 
@@ -28,16 +30,39 @@ type Product = {
   price?: number;
   original_price?: number;
   image_url?: string;
+  variants?: Array<{
+    id: number;
+    name?: string | null;
+    type?: string | null;
+    price?: number | string | null;
+  }>;
+};
+
+type AvailableProductRow = {
+  product: Product;
+  variantOptions: Array<{
+    id: number | null;
+    label: string;
+    price: number;
+  }>;
 };
 
 type SectionItem = {
   id: number;
   section: string;
   product_id: number;
+  variant_id?: number | null;
   product?: Product | null;
+  variant?: {
+    id: number;
+    name?: string | null;
+    type?: string | null;
+    price?: number | string | null;
+  } | null;
 };
 
 export default function HomeSectionsPage() {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState(SECTION_TABS[0].key);
   const [products, setProducts] = useState<Product[]>([]);
   const [sections, setSections] = useState<Record<string, SectionItem[]>>({});
@@ -46,6 +71,7 @@ export default function HomeSectionsPage() {
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [variantSelections, setVariantSelections] = useState<Record<number, number | null>>({});
 
   const loadAll = async () => {
     try {
@@ -102,28 +128,56 @@ export default function HomeSectionsPage() {
     return new Map(products.map((product) => [product.id, product]));
   }, [products]);
 
-  const selectedIds = useMemo(() => {
+  const selectedKeys = useMemo(() => {
     const current = sections[activeTab] || [];
-    return new Set(current.map((item) => item.product_id));
+    return new Set(
+      current.map((item) => `${item.product_id}:${item.variant_id ?? "base"}`)
+    );
   }, [sections, activeTab]);
 
-  const availableProducts = useMemo(() => {
+  const availableProducts = useMemo<AvailableProductRow[]>(() => {
     const term = search.trim().toLowerCase();
-    return products.filter((product) => {
-      if (selectedIds.has(product.id)) return false;
-      if (!term) return true;
-      return product.name?.toLowerCase().includes(term);
-    });
-  }, [products, selectedIds, search]);
+    return products
+      .map((product) => {
+        const productName = String(product.name || "").toLowerCase();
+        if (term && !productName.includes(term)) return null;
 
-  const handleAdd = async (productId: number) => {
+      const variants = Array.isArray(product.variants) ? product.variants : [];
+        const hasDefaultSelected = selectedKeys.has(`${product.id}:base`);
+
+        const variantOptions =
+          variants.length > 0
+            ? variants
+                .filter((variant) => !selectedKeys.has(`${product.id}:${variant.id}`))
+                .map((variant) => ({
+                  id: variant.id,
+                  label: variant.name || variant.type || `Variant #${variant.id}`,
+                  price: Number(variant.price || 0)
+                }))
+            : hasDefaultSelected
+              ? []
+              : [
+                  {
+                    id: null,
+                    label: "Default",
+                    price: Number(product.price || 0)
+                  }
+                ];
+
+        if (variantOptions.length === 0) return null;
+        return { product, variantOptions };
+      })
+      .filter(Boolean) as AvailableProductRow[];
+  }, [products, selectedKeys, search]);
+
+  const handleAdd = async (productId: number, variantId?: number | null) => {
     try {
       setBusyId(productId);
       setErrorMessage("");
       const response = await fetch(`${API_BASE_URL}/api/homepage-sections`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ section: activeTab, productId })
+        body: JSON.stringify({ section: activeTab, productId, variantId: variantId ?? null })
       });
       const result = await response.json();
       if (!response.ok || !result?.success) {
@@ -131,6 +185,10 @@ export default function HomeSectionsPage() {
       }
 
       await loadSection(activeTab);
+      toast({
+        title: "Added",
+        description: "Product added to homepage section."
+      });
     } catch (error: any) {
       setErrorMessage(error?.message || "Failed to add product");
     } finally {
@@ -206,6 +264,7 @@ export default function HomeSectionsPage() {
                             <TableHeader>
                               <TableRow>
                                 <TableHead>Product</TableHead>
+                                <TableHead>Variant</TableHead>
                                 <TableHead>Price</TableHead>
                                 <TableHead className="text-right">Action</TableHead>
                               </TableRow>
@@ -213,26 +272,59 @@ export default function HomeSectionsPage() {
                             <TableBody>
                               {availableProducts.length === 0 ? (
                                 <TableRow>
-                                  <TableCell colSpan={3} className="text-sm text-muted-foreground">
+                                  <TableCell colSpan={4} className="text-sm text-muted-foreground">
                                     No available products.
                                   </TableCell>
                                 </TableRow>
                               ) : (
-                                availableProducts.map((product) => (
-                                  <TableRow key={product.id}>
-                                    <TableCell className="font-medium">{product.name}</TableCell>
-                                    <TableCell>{formatCurrency(Number(product.price || 0))}</TableCell>
+                                availableProducts.map((row) => {
+                                  const selectedVariantId =
+                                    Object.prototype.hasOwnProperty.call(variantSelections, row.product.id)
+                                      ? variantSelections[row.product.id]
+                                      : row.variantOptions[0]?.id ?? null;
+                                  const selectedOption =
+                                    row.variantOptions.find((opt) => opt.id === selectedVariantId) ||
+                                    row.variantOptions[0];
+                                  return (
+                                  <TableRow key={`${row.product.id}`}>
+                                    <TableCell className="font-medium">{row.product.name}</TableCell>
+                                    <TableCell>
+                                      <Select
+                                        value={selectedOption?.id === null ? "base" : String(selectedOption?.id)}
+                                        onValueChange={(value) => {
+                                          setVariantSelections((prev) => ({
+                                            ...prev,
+                                            [row.product.id]: value === "base" ? null : Number(value)
+                                          }));
+                                        }}
+                                      >
+                                        <SelectTrigger className="h-9 w-full min-w-[120px] rounded-lg border border-gray-200 bg-white">
+                                          <SelectValue placeholder="Select variant" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {row.variantOptions.map((option) => (
+                                            <SelectItem
+                                              key={`${row.product.id}-${option.id ?? "base"}`}
+                                              value={option.id === null ? "base" : String(option.id)}
+                                            >
+                                              {option.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </TableCell>
+                                    <TableCell>{formatCurrency(Number(selectedOption?.price || 0))}</TableCell>
                                     <TableCell className="text-right">
                                       <Button
                                         size="sm"
-                                        onClick={() => handleAdd(product.id)}
-                                        disabled={busyId === product.id}
+                                        onClick={() => handleAdd(row.product.id, selectedOption?.id ?? null)}
+                                        disabled={busyId === row.product.id || !selectedOption}
                                       >
                                         Add
                                       </Button>
                                     </TableCell>
                                   </TableRow>
-                                ))
+                                )})
                               )}
                             </TableBody>
                           </Table>
@@ -256,6 +348,7 @@ export default function HomeSectionsPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Product</TableHead>
+                        <TableHead>Variant</TableHead>
                         <TableHead>Price</TableHead>
                         <TableHead className="text-right">Action</TableHead>
                       </TableRow>
@@ -266,7 +359,12 @@ export default function HomeSectionsPage() {
                         return (
                           <TableRow key={item.id}>
                             <TableCell className="font-medium">{product?.name || "Unknown product"}</TableCell>
-                            <TableCell>{formatCurrency(Number(product?.price || 0))}</TableCell>
+                            <TableCell>{item.variant?.name || (item.variant_id ? `Variant #${item.variant_id}` : "Default")}</TableCell>
+                            <TableCell>
+                              {formatCurrency(
+                                Number(item.variant?.price ?? product?.price ?? 0)
+                              )}
+                            </TableCell>
                             <TableCell className="text-right">
                               <ConfirmDialog
                                 trigger={

@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { ArrowLeft, Plus, Upload, X, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { slugify } from '@/lib/slugify';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
@@ -170,7 +171,7 @@ export default function CategoryDetailsPage() {
       });
       return;
     }
-    const slug = newSub.slug || newSub.name.toLowerCase().replace(/\s+/g, '-');
+    const slug = slugify(newSub.slug || newSub.name);
     try {
       const response = await fetch(`${API_BASE_URL}/api/subcategories`, {
         method: 'POST',
@@ -213,7 +214,7 @@ export default function CategoryDetailsPage() {
       });
       return;
     }
-    const slug = editSub.slug || editSub.name.toLowerCase().replace(/\s+/g, '-');
+    const slug = slugify(editSub.slug || editSub.name);
     try {
       const response = await fetch(`${API_BASE_URL}/api/subcategories/${editingSubId}`, {
         method: 'PUT',

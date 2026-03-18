@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { slugify } from '@/lib/slugify';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
@@ -43,7 +44,7 @@ export default function AddCategoryPage() {
     }
     setIsSubmitting(true);
     try {
-      const slug = formData.name.toLowerCase().replace(/\s+/g, '-');
+      const slug = slugify(formData.name);
       const response = await fetch(`${API_BASE_URL}/api/categories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
