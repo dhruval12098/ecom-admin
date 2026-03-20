@@ -30,7 +30,7 @@ const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
     smtpSecure: false,
     taxRate: '5',
     currency: 'EUR',
-    vatNumber: 'BE1025098473',
+    vatNumber: '',
     maintenanceEnabled: false,
     maintenanceMessage: 'We are performing scheduled maintenance. Please check back soon.',
     shippingNote: 'Standard delivery within 2-3 business days.',

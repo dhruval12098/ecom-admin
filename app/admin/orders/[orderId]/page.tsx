@@ -25,26 +25,129 @@ export default function OrderDetailsPage() {
   const [pendingStatus, setPendingStatus] = useState('Pending');
   const [isSavingStatus, setIsSavingStatus] = useState(false);
   const printDeliveryAddress = () => {
-    const content = document.getElementById('delivery-address-print');
-    if (!content) return;
+    if (!order) return;
+    const items = Array.isArray(order.items) ? order.items : [];
+    const payment = splitPaymentMethod(
+      order?.payments?.[0]?.method || order?.payment_method || order?.paymentMethod,
+      order?.payments?.[0]?.payment_brand,
+      order?.payments?.[0]?.payment_method_type
+    );
+    const paymentLine = payment.detail !== '-' ? `${payment.gateway} • ${payment.detail}` : payment.gateway;
+    const orderNumber = order?.order_number || order?.order_code || order?.id || orderId;
+    const placedAt = order?.created_at ? new Date(order.created_at).toLocaleString() : '';
+    const addressLines = [
+      `${order?.address_street || ''} ${order?.address_house || ''}`.trim(),
+      order?.address_apartment ? order.address_apartment : '',
+      `${order?.address_city || ''} ${order?.address_postal_code ? `- ${order.address_postal_code}` : ''}`.trim(),
+      order?.address_country || ''
+    ].filter(Boolean);
     const win = window.open('', 'printWindow', 'width=800,height=600');
     if (!win) return;
     win.document.write(`
       <html>
         <head>
-          <title>Print Delivery Address</title>
+          <title>Order Receipt</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 24px; }
-            h2 { margin: 0 0 12px; font-size: 18px; }
-            .block { border: 1px solid #e5e7eb; padding: 16px; border-radius: 8px; }
-            .label { color: #6b7280; font-size: 12px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
-            .value { font-size: 14px; margin-bottom: 8px; }
+            * { box-sizing: border-box; }
+            body { font-family: "Inter", Arial, sans-serif; padding: 32px; color: #111827; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+            .title { font-size: 20px; font-weight: 700; }
+            .muted { color: #6b7280; font-size: 12px; }
+            .section { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+            .section h3 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; }
+            .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+            .line { font-size: 14px; margin: 0 0 6px; }
+            table { width: 100%; border-collapse: collapse; font-size: 13px; }
+            th, td { padding: 10px 6px; border-bottom: 1px solid #e5e7eb; }
+            th { text-align: left; color: #6b7280; font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.08em; }
+            td { vertical-align: top; }
+            .right { text-align: right; }
+            .total-row td { font-weight: 700; }
+            .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef2ff; color: #4338ca; font-size: 11px; font-weight: 600; }
           </style>
         </head>
         <body>
-          <div class="block">
-            <h2>Delivery Address</h2>
-            ${content.innerHTML}
+          <div class="header">
+            <div>
+              <div class="title">Order Receipt</div>
+              <div class="muted">Order ${orderNumber}</div>
+              <div class="muted">${placedAt}</div>
+            </div>
+            <div class="badge">${normalizeStatus(order?.status || '')}</div>
+          </div>
+
+          <div class="section">
+            <h3>Customer & Delivery</h3>
+            <div class="grid">
+              <div>
+                <p class="line"><strong>Name:</strong> ${order?.customer_name || '-'}</p>
+                <p class="line"><strong>Phone:</strong> ${order?.customer_phone || '-'}</p>
+                <p class="line"><strong>Email:</strong> ${order?.customer_email || '-'}</p>
+              </div>
+              <div>
+                <p class="line"><strong>Address:</strong></p>
+                ${addressLines.map((line) => `<p class="line">${line}</p>`).join('')}
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Order Items</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th class="right">Qty</th>
+                  <th class="right">Unit</th>
+                  <th class="right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items.map((item) => `
+                  <tr>
+                    <td>
+                      <div>${item.product_name || '-'}</div>
+                      ${item.variant_name ? `<div class="muted">${item.variant_name}</div>` : ''}
+                    </td>
+                    <td class="right">${item.quantity || 0}</td>
+                    <td class="right">${formatCurrency(item.unit_price || 0)}</td>
+                    <td class="right">${formatCurrency(item.total_price || 0)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="section">
+            <h3>Payment Summary</h3>
+            <table>
+              <tbody>
+                <tr>
+                  <td>Subtotal</td>
+                  <td class="right">${formatCurrency(order?.subtotal || 0)}</td>
+                </tr>
+                <tr>
+                  <td>Tax</td>
+                  <td class="right">${formatCurrency(order?.tax_amount || 0)}</td>
+                </tr>
+                <tr>
+                  <td>Delivery</td>
+                  <td class="right">${formatCurrency(order?.shipping_fee || 0)}</td>
+                </tr>
+                <tr>
+                  <td>Discount</td>
+                  <td class="right">-${formatCurrency(Number(order?.discount_amount || order?.discountAmount || 0))}</td>
+                </tr>
+                <tr class="total-row">
+                  <td>Total</td>
+                  <td class="right">${formatCurrency(order?.total_amount || 0)}</td>
+                </tr>
+                <tr>
+                  <td>Payment Method</td>
+                  <td class="right">${paymentLine}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
           <script>
             window.onload = function() { window.print(); window.close(); };
@@ -540,7 +643,7 @@ export default function OrderDetailsPage() {
             <div className="bg-card border border-border rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold text-foreground">Delivery Address</h2>
-                <Button variant="outline" size="sm" onClick={printDeliveryAddress}>Print</Button>
+                <Button variant="outline" size="sm" onClick={printDeliveryAddress}>Print Receipt</Button>
               </div>
               <div id="delivery-address-print">
                 <div className="text-xs text-muted-foreground mb-1">Name</div>
