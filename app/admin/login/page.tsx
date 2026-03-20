@@ -50,7 +50,7 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <p className="text-xs uppercase tracking-[0.3em] text-gray-500 mb-3">Admin Access</p>
           <h1 className="text-2xl md:text-3xl font-semibold text-gray-900">
-            Tulsi Grocery Ecommerce
+            Tulsi Ecommerce
           </h1>
           <p className="text-sm text-gray-500 mt-2">
             Sign in to manage orders, products, and store settings.

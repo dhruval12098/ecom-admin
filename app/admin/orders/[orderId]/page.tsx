@@ -24,6 +24,36 @@ export default function OrderDetailsPage() {
   const [currentStatus, setCurrentStatus] = useState('Pending');
   const [pendingStatus, setPendingStatus] = useState('Pending');
   const [isSavingStatus, setIsSavingStatus] = useState(false);
+  const printDeliveryAddress = () => {
+    const content = document.getElementById('delivery-address-print');
+    if (!content) return;
+    const win = window.open('', 'printWindow', 'width=800,height=600');
+    if (!win) return;
+    win.document.write(`
+      <html>
+        <head>
+          <title>Print Delivery Address</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; }
+            h2 { margin: 0 0 12px; font-size: 18px; }
+            .block { border: 1px solid #e5e7eb; padding: 16px; border-radius: 8px; }
+            .label { color: #6b7280; font-size: 12px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+            .value { font-size: 14px; margin-bottom: 8px; }
+          </style>
+        </head>
+        <body>
+          <div class="block">
+            <h2>Delivery Address</h2>
+            ${content.innerHTML}
+          </div>
+          <script>
+            window.onload = function() { window.print(); window.close(); };
+          </script>
+        </body>
+      </html>
+    `);
+    win.document.close();
+  };
   const [isDownloadingInvoice, setIsDownloadingInvoice] = useState(false);
   const [isSyncingPayment, setIsSyncingPayment] = useState(false);
   const [isRefunding, setIsRefunding] = useState(false);
@@ -357,7 +387,6 @@ export default function OrderDetailsPage() {
                           <SelectItem
                             key={s}
                             value={s}
-                            disabled={normalizeStatus(currentStatus) !== 'Confirmed' && s !== 'Confirmed' && s !== normalizeStatus(currentStatus)}
                           >
                             {s}
                           </SelectItem>
@@ -509,13 +538,23 @@ export default function OrderDetailsPage() {
             </div>
 
             <div className="bg-card border border-border rounded-lg p-6">
-              <h2 className="text-base font-semibold text-foreground mb-4">Delivery Address</h2>
-              <p className="text-foreground text-sm">
-                {order?.address_street} {order?.address_house}<br />
-                {order?.address_apartment && (<>{order.address_apartment}<br /></>)}
-                {order?.address_city} - {order?.address_postal_code}<br />
-                {order?.address_country}
-              </p>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-semibold text-foreground">Delivery Address</h2>
+                <Button variant="outline" size="sm" onClick={printDeliveryAddress}>Print</Button>
+              </div>
+              <div id="delivery-address-print">
+                <div className="text-xs text-muted-foreground mb-1">Name</div>
+                <div className="text-sm text-foreground mb-2">{order?.customer_name || '-'}</div>
+                <div className="text-xs text-muted-foreground mb-1">Phone</div>
+                <div className="text-sm text-foreground mb-2">{order?.customer_phone || '-'}</div>
+                <div className="text-xs text-muted-foreground mb-1">Address</div>
+                <div className="text-sm text-foreground">
+                  {order?.address_street} {order?.address_house}<br />
+                  {order?.address_apartment && (<>{order.address_apartment}<br /></>)}
+                  {order?.address_city} - {order?.address_postal_code}<br />
+                  {order?.address_country}
+                </div>
+              </div>
             </div>
 
             <div className="bg-card border border-border rounded-lg p-6">

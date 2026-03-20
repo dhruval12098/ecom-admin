@@ -30,6 +30,7 @@ const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
     smtpSecure: false,
     taxRate: '5',
     currency: 'EUR',
+    vatNumber: 'BE1025098473',
     maintenanceEnabled: false,
     maintenanceMessage: 'We are performing scheduled maintenance. Please check back soon.',
     shippingNote: 'Standard delivery within 2-3 business days.',
@@ -102,6 +103,7 @@ export default function SettingsPage() {
             smtpSecure: Boolean(data.smtp_secure),
             taxRate: data.tax_rate !== null && data.tax_rate !== undefined ? String(data.tax_rate) : initialForm.taxRate,
             currency: data.currency_code ?? initialForm.currency,
+            vatNumber: data.vat_number ?? initialForm.vatNumber,
             maintenanceEnabled: Boolean(data.maintenance_enabled),
             maintenanceMessage: data.maintenance_message ?? initialForm.maintenanceMessage,
             shippingNote: data.shipping_note ?? initialForm.shippingNote,
@@ -151,6 +153,7 @@ export default function SettingsPage() {
         smtp_secure: nextForm.smtpSecure,
         tax_rate: nextForm.taxRate ? Number(nextForm.taxRate) : null,
         currency_code: nextForm.currency,
+        vat_number: nextForm.vatNumber || null,
         maintenance_enabled: nextForm.maintenanceEnabled,
         maintenance_message: nextForm.maintenanceMessage,
         shipping_note: nextForm.shippingNote,
@@ -436,6 +439,15 @@ export default function SettingsPage() {
                     onChange={(e) => handleChange('taxRate', e.target.value)}
                     type="number"
                     placeholder="5"
+                    disabled={isLoading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Store VAT Number</label>
+                  <Input
+                    value={form.vatNumber ?? ''}
+                    onChange={(e) => handleChange('vatNumber', e.target.value)}
+                    placeholder="BE1025098473"
                     disabled={isLoading}
                   />
                 </div>

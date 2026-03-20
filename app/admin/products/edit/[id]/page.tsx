@@ -778,30 +778,6 @@ export default function EditProductPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Tax (%)</label>
-                    <input
-                      type="number"
-                      value={customTaxEnabled ? customTaxRate : taxRate}
-                      onChange={(e) => setCustomTaxRate(e.target.value)}
-                      min={0}
-                      step={0.1}
-                      inputMode="decimal"
-                      onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-                      disabled={!customTaxEnabled || pricingLocked}
-                      className="w-full px-4 py-2.5 rounded-md bg-muted/60 border border-border text-foreground focus:outline-none"
-                    />
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <p className="text-xs text-muted-foreground">
-                        {customTaxEnabled ? 'Custom tax for this product' : 'Global VAT from Settings'}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Customize</span>
-                        <Switch checked={customTaxEnabled} onCheckedChange={setCustomTaxEnabled} disabled={pricingLocked} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
                     <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Stock Quantity</label>
                     <input
                       type="number"
@@ -865,6 +841,34 @@ export default function EditProductPage() {
                         setFormData((prev) => ({ ...prev, shippingType: checked ? 'free' : 'standard' }))
                       }
                     />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">VAT / Tax</label>
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3">
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-foreground">Custom VAT for this product</div>
+                      <div className="text-xs text-muted-foreground">
+                        {customTaxEnabled
+                          ? (formData.hasVariants ? 'Applies to all variants' : 'Applies to this product')
+                          : 'Uses global VAT from Settings'}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        value={customTaxEnabled ? customTaxRate : taxRate}
+                        onChange={(e) => setCustomTaxRate(e.target.value)}
+                        min={0}
+                        step={0.1}
+                        inputMode="decimal"
+                        onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                        disabled={!customTaxEnabled}
+                        className="w-24 px-3 py-2 rounded-md bg-muted/60 border border-border text-foreground focus:outline-none text-right"
+                      />
+                      <Switch checked={customTaxEnabled} onCheckedChange={setCustomTaxEnabled} />
+                    </div>
                   </div>
                 </div>
 

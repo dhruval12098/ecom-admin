@@ -7,6 +7,8 @@ import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Upload, Save } from 'lucide-react';
 
@@ -28,6 +30,16 @@ export default function EditHeroSlidePage() {
   const slideId = params?.id;
 
   const [slide, setSlide] = useState<HeroSlide | null>(null);
+  const [catalog, setCatalog] = useState<any[]>([]);
+  const [linkIsSelection, setLinkIsSelection] = useState(false);
+  const [linkWizardOpen, setLinkWizardOpen] = useState(false);
+  const [useSelector, setUseSelector] = useState(false);
+  const [linkSelection, setLinkSelection] = useState({
+    category: '',
+    subcategory: '',
+    product: '',
+    variant: ''
+  });
   const [isLoading, setIsLoading] = useState(true);
     const [uploadingTarget, setUploadingTarget] = useState<null | 'desktop' | 'mobile'>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -60,6 +72,189 @@ export default function EditHeroSlidePage() {
     };
     fetchSlide();
   }, [slideId]);
+
+  useEffect(() => {
+    const fetchCatalog = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/categories?includeInactive=true&includeEmpty=true`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setCatalog(result.data);
+        }
+      } catch {
+        // keep UI stable
+      }
+    };
+    fetchCatalog();
+  }, []);
+
+  const buildProductLink = (selection: { category: string; subcategory: string; product: string; variant: string }) => {
+    const category = catalog.find((c) => String(c.id) === selection.category);
+    const sub = category?.subcategories?.find((s: any) => String(s.id) === selection.subcategory);
+    const product = sub?.products?.find((p: any) => String(p.id) === selection.product);
+    if (!category || !sub || !product) return '';
+    const base = `/${category.slug}/${sub.slug}/${product.slug || product.id}`;
+    if (selection.variant) {
+      return `${base}?variant=${selection.variant}`;
+    }
+    return base;
+  };
+
+  const LinkWizard = ({
+    open,
+    onOpenChange,
+    title,
+    onApply
+  }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    title: string;
+    onApply: (link: string) => void;
+  }) => {
+    const [step, setStep] = useState(1);
+    const [selection, setSelection] = useState({ category: '', subcategory: '', product: '', variant: '' });
+    const category = catalog.find((c) => String(c.id) === selection.category);
+    const sub = category?.subcategories?.find((s: any) => String(s.id) === selection.subcategory);
+    const product = sub?.products?.find((p: any) => String(p.id) === selection.product);
+    const variants = product?.variants || [];
+
+    useEffect(() => {
+      if (!open) {
+        setStep(1);
+        setSelection({ category: '', subcategory: '', product: '', variant: '' });
+      }
+    }, [open]);
+
+    const canNext =
+      (step === 1 && selection.category) ||
+      (step === 2 && selection.subcategory) ||
+      (step === 3 && selection.product) ||
+      (step === 4 && selection.variant);
+
+    const handleNext = () => {
+      if (step === 3 && (!variants || variants.length === 0)) {
+        const link = buildProductLink(selection);
+        onApply(link);
+        onOpenChange(false);
+        return;
+      }
+      setStep((prev) => Math.min(prev + 1, variants.length > 0 ? 4 : 3));
+    };
+
+    const handleBack = () => {
+      setStep((prev) => Math.max(prev - 1, 1));
+    };
+
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+          </DialogHeader>
+          <div className="text-xs text-muted-foreground">Step {step} of {variants.length > 0 ? 4 : 3}</div>
+          <div className="mt-4 space-y-3">
+            {step === 1 && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Choose Category</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {catalog.map((c: any) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className={`px-3 py-2 rounded-md border text-left ${selection.category === String(c.id) ? 'border-primary bg-primary/10' : 'border-border'}`}
+                      onClick={() => setSelection({ category: String(c.id), subcategory: '', product: '', variant: '' })}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {step === 2 && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Choose Subcategory</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(category?.subcategories || []).map((s: any) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`px-3 py-2 rounded-md border text-left ${selection.subcategory === String(s.id) ? 'border-primary bg-primary/10' : 'border-border'}`}
+                      onClick={() => setSelection((prev) => ({ ...prev, subcategory: String(s.id), product: '', variant: '' }))}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {step === 3 && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Choose Product</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(sub?.products || []).map((p: any) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className={`px-3 py-2 rounded-md border text-left ${selection.product === String(p.id) ? 'border-primary bg-primary/10' : 'border-border'}`}
+                      onClick={() => setSelection((prev) => ({ ...prev, product: String(p.id), variant: '' }))}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {step === 4 && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Choose Variant</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {variants.map((v: any) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      className={`px-3 py-2 rounded-md border text-left ${selection.variant === String(v.id) ? 'border-primary bg-primary/10' : 'border-border'}`}
+                      onClick={() => setSelection((prev) => ({ ...prev, variant: String(v.id) }))}
+                    >
+                      {v.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="mt-4">
+            <div className="flex justify-between w-full">
+              <Button type="button" variant="outline" onClick={handleBack} disabled={step === 1}>
+                Back
+              </Button>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                  Cancel
+                </Button>
+                {step === (variants.length > 0 ? 4 : 3) ? (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const link = buildProductLink(selection);
+                      onApply(link);
+                      onOpenChange(false);
+                    }}
+                    disabled={!canNext}
+                  >
+                    Use Link
+                  </Button>
+                ) : (
+                  <Button type="button" onClick={handleNext} disabled={!canNext}>
+                    Next
+                  </Button>
+                )}
+              </div>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  };
 
   const uploadImage = async (file: File) => {
     const formData = new FormData();
@@ -199,18 +394,60 @@ export default function EditHeroSlidePage() {
                 )}
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Banner Link (optional)</Label>
-              <Input
-                type="url"
-                value={slide.buttonLink || ''}
-                onChange={(e) => setSlide((prev) => (prev ? { ...prev, buttonLink: e.target.value } : prev))}
-                placeholder="https://example.com/collection"
-              />
-              <p className="text-xs text-muted-foreground">
-                This link will open when the banner is clicked on the homepage.
-              </p>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Use Category Selector</Label>
+                <Switch
+                  checked={useSelector}
+                  onCheckedChange={(checked) => {
+                    setUseSelector(checked);
+                    if (checked) {
+                      setSlide((prev) => (prev ? { ...prev, buttonLink: '' } : prev));
+                      setLinkIsSelection(true);
+                    } else {
+                      setLinkIsSelection(false);
+                    }
+                  }}
+                />
+              </div>
+              <div>
+                <Label>Banner Link</Label>
+                <Input
+                  type="url"
+                  value={slide.buttonLink || ''}
+                  onChange={(e) => {
+                    setSlide((prev) => (prev ? { ...prev, buttonLink: e.target.value } : prev));
+                    if (e.target.value) {
+                      setLinkSelection({ category: '', subcategory: '', product: '', variant: '' });
+                      setLinkIsSelection(false);
+                    }
+                  }}
+                  placeholder="https://example.com/collection"
+                  readOnly={useSelector}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {useSelector ? 'This link is generated from your selection.' : 'This link will open when the banner is clicked on the homepage.'}
+                </p>
+              </div>
+              {useSelector && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setLinkWizardOpen(true)}
+                >
+                  Select Category / Product / Variant
+                </Button>
+              )}
             </div>
+            <LinkWizard
+              open={linkWizardOpen}
+              onOpenChange={setLinkWizardOpen}
+              title="Select Link Target for Banner"
+              onApply={(link) => {
+                setLinkIsSelection(true);
+                setSlide((prev) => (prev ? { ...prev, buttonLink: link } : prev));
+              }}
+            />
 
             {error && (
               <div className="text-destructive text-sm p-2 bg-destructive/10 rounded">

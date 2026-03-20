@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Bell, Moon, Sun, LogOut } from 'lucide-react';
+import { Search, Moon, Sun, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -50,16 +50,6 @@ export function Topbar() {
 
       {/* Right items */}
       <div className="flex items-center gap-4 ml-6">
-        {/* Notifications */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative"
-        >
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
-        </Button>
-
         {/* Theme toggle */}
         <Button
           variant="ghost"
@@ -86,13 +76,6 @@ export function Topbar() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem disabled>
-              <div className="text-sm font-medium">Admin User</div>
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled>
-              <div className="text-xs text-muted-foreground">{adminEmail}</div>
-            </DropdownMenuItem>
-            <DropdownMenuItem>Profile</DropdownMenuItem>
             <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuItem
               className="text-destructive"

@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -43,11 +44,10 @@ export default function ContentPage() {
   const pathname = usePathname();
   const [activeTab, setActiveTab] = useState<TabType>('hero');
   const [heroSliders, setHeroSliders] = useState<HeroSlide[]>([]);
+  const [catalog, setCatalog] = useState<any[]>([]);
   const [trends, setTrends] = useState<any[]>([]);
   const [isTrendsLoading, setIsTrendsLoading] = useState(false);
   const [isAddingTrend, setIsAddingTrend] = useState(false);
-  const [isEditingTrend, setIsEditingTrend] = useState(false);
-  const [editTrend, setEditTrend] = useState<any | null>(null);
   const [newTrend, setNewTrend] = useState({
     title: '',
     description: '',
@@ -57,6 +57,30 @@ export default function ContentPage() {
   const [trendUploadError, setTrendUploadError] = useState('');
   const [uploadingTrendId, setUploadingTrendId] = useState<number | 'new' | null>(null);
   const [savingTrendId, setSavingTrendId] = useState<number | 'new' | null>(null);
+  const [heroLinkSelection, setHeroLinkSelection] = useState({
+    category: '',
+    subcategory: '',
+    product: '',
+    variant: ''
+  });
+  const [heroLinkIsSelection, setHeroLinkIsSelection] = useState(false);
+  const [heroLinkWizardOpen, setHeroLinkWizardOpen] = useState(false);
+  const [heroUseSelector, setHeroUseSelector] = useState(false);
+  const [trendLinkSelection, setTrendLinkSelection] = useState({
+    category: '',
+    subcategory: '',
+    product: '',
+    variant: ''
+  });
+  const [trendLinkIsSelection, setTrendLinkIsSelection] = useState(false);
+  const [trendLinkWizardOpen, setTrendLinkWizardOpen] = useState(false);
+  const [trendUseSelector, setTrendUseSelector] = useState(false);
+  const [editHeroLinkSelection, setEditHeroLinkSelection] = useState({
+    category: '',
+    subcategory: '',
+    product: '',
+    variant: ''
+  });
 
   const [offerBar, setOfferBar] = useState({
     message: '',
@@ -367,6 +391,189 @@ export default function ContentPage() {
     fetchTrends();
   }, []);
 
+  useEffect(() => {
+    const fetchCatalog = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/categories?includeInactive=true&includeEmpty=true`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setCatalog(result.data);
+        }
+      } catch {
+        // keep UI stable
+      }
+    };
+    fetchCatalog();
+  }, []);
+
+  const buildProductLink = (selection: { category: string; subcategory: string; product: string; variant: string }) => {
+    const category = catalog.find((c) => String(c.id) === selection.category);
+    const sub = category?.subcategories?.find((s: any) => String(s.id) === selection.subcategory);
+    const product = sub?.products?.find((p: any) => String(p.id) === selection.product);
+    if (!category || !sub || !product) return '';
+    const base = `/${category.slug}/${sub.slug}/${product.slug || product.id}`;
+    if (selection.variant) {
+      return `${base}?variant=${selection.variant}`;
+    }
+    return base;
+  };
+
+  const LinkWizard = ({
+    open,
+    onOpenChange,
+    title,
+    onApply
+  }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    title: string;
+    onApply: (link: string) => void;
+  }) => {
+    const [step, setStep] = useState(1);
+    const [selection, setSelection] = useState({ category: '', subcategory: '', product: '', variant: '' });
+    const category = catalog.find((c) => String(c.id) === selection.category);
+    const sub = category?.subcategories?.find((s: any) => String(s.id) === selection.subcategory);
+    const product = sub?.products?.find((p: any) => String(p.id) === selection.product);
+    const variants = product?.variants || [];
+
+    useEffect(() => {
+      if (!open) {
+        setStep(1);
+        setSelection({ category: '', subcategory: '', product: '', variant: '' });
+      }
+    }, [open]);
+
+    const canNext =
+      (step === 1 && selection.category) ||
+      (step === 2 && selection.subcategory) ||
+      (step === 3 && selection.product) ||
+      (step === 4 && selection.variant);
+
+    const handleNext = () => {
+      if (step === 3 && (!variants || variants.length === 0)) {
+        const link = buildProductLink(selection);
+        onApply(link);
+        onOpenChange(false);
+        return;
+      }
+      setStep((prev) => Math.min(prev + 1, variants.length > 0 ? 4 : 3));
+    };
+
+    const handleBack = () => {
+      setStep((prev) => Math.max(prev - 1, 1));
+    };
+
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+          </DialogHeader>
+          <div className="text-xs text-muted-foreground">Step {step} of {variants.length > 0 ? 4 : 3}</div>
+          <div className="mt-4 space-y-3">
+            {step === 1 && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Choose Category</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {catalog.map((c: any) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className={`px-3 py-2 rounded-md border text-left ${selection.category === String(c.id) ? 'border-primary bg-primary/10' : 'border-border'}`}
+                      onClick={() => setSelection({ category: String(c.id), subcategory: '', product: '', variant: '' })}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {step === 2 && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Choose Subcategory</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(category?.subcategories || []).map((s: any) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`px-3 py-2 rounded-md border text-left ${selection.subcategory === String(s.id) ? 'border-primary bg-primary/10' : 'border-border'}`}
+                      onClick={() => setSelection((prev) => ({ ...prev, subcategory: String(s.id), product: '', variant: '' }))}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {step === 3 && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Choose Product</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(sub?.products || []).map((p: any) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className={`px-3 py-2 rounded-md border text-left ${selection.product === String(p.id) ? 'border-primary bg-primary/10' : 'border-border'}`}
+                      onClick={() => setSelection((prev) => ({ ...prev, product: String(p.id), variant: '' }))}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {step === 4 && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Choose Variant</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {variants.map((v: any) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      className={`px-3 py-2 rounded-md border text-left ${selection.variant === String(v.id) ? 'border-primary bg-primary/10' : 'border-border'}`}
+                      onClick={() => setSelection((prev) => ({ ...prev, variant: String(v.id) }))}
+                    >
+                      {v.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="mt-4">
+            <div className="flex justify-between w-full">
+              <Button type="button" variant="outline" onClick={handleBack} disabled={step === 1}>
+                Back
+              </Button>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                  Cancel
+                </Button>
+                {step === (variants.length > 0 ? 4 : 3) ? (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const link = buildProductLink(selection);
+                      onApply(link);
+                      onOpenChange(false);
+                    }}
+                    disabled={!canNext}
+                  >
+                    Use Link
+                  </Button>
+                ) : (
+                  <Button type="button" onClick={handleNext} disabled={!canNext}>
+                    Next
+                  </Button>
+                )}
+              </div>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
   const removeTrend = async (id: number) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/trends/${id}`, {
@@ -531,63 +738,6 @@ export default function ContentPage() {
       }
     };
 
-  const openEditTrend = (trend: any) => {
-    setEditTrend({
-      id: trend.id,
-      title: trend.title || '',
-      description: trend.description || '',
-      imageUrl: trend.image_url || '',
-      linkUrl: trend.link_url || ''
-    });
-    setIsEditingTrend(true);
-  };
-
-  const handleEditTrendImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!editTrend) return;
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setUploadingTrendId(editTrend.id);
-    setTrendUploadError('');
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('fileName', file.name);
-      formData.append('contentType', file.type);
-      formData.append('folder', 'trends');
-
-      const response = await fetch(`${API_BASE_URL}/api/storage`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        const imageUrl = result.data.publicUrl;
-        setEditTrend((prev: any) => ({ ...prev, imageUrl }));
-        toast({
-          title: 'Success',
-          description: 'Image uploaded successfully.',
-        });
-      } else {
-        setTrendUploadError(result.error || 'Upload failed');
-        toast({
-          title: 'Error',
-          description: result.error || 'Upload failed',
-          variant: 'destructive',
-        });
-      }
-    } catch (error) {
-      setTrendUploadError('Upload failed: ' + (error as Error).message);
-      toast({
-        title: 'Error',
-        description: 'Upload failed: ' + (error as Error).message,
-        variant: 'destructive',
-      });
-    } finally {
-      setUploadingTrendId(null);
-    }
-  };
 
   const handleSaveOfferBar = async () => {
     if (!offerBar.message.trim()) {
@@ -633,42 +783,6 @@ export default function ContentPage() {
     }
   };
 
-  const handleSaveEditTrend = async () => {
-    if (!editTrend) return;
-    setSavingTrendId(editTrend.id);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/trends/${editTrend.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: editTrend.title,
-          description: editTrend.description,
-          imageUrl: editTrend.imageUrl,
-          linkUrl: editTrend.linkUrl || null,
-          sortOrder: trends.findIndex(t => t.id === editTrend.id)
-        })
-      });
-      const result = await response.json();
-      if (!result.success) {
-        throw new Error(result.error || 'Save failed');
-      }
-      setTrends(prev => prev.map(t => t.id === editTrend.id ? { ...t, title: editTrend.title, description: editTrend.description, image_url: editTrend.imageUrl, link_url: editTrend.linkUrl } : t));
-      toast({
-        title: 'Success',
-        description: 'Trend updated successfully.',
-      });
-      setIsEditingTrend(false);
-      setEditTrend(null);
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to save trend.',
-        variant: 'destructive',
-      });
-    } finally {
-      setSavingTrendId(null);
-    }
-  };
 
   return (
     <AdminLayout>
@@ -786,17 +900,50 @@ export default function ContentPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="md:col-span-2">
-                        <Label>Banner Link (optional)</Label>
-                        <Input
-                          type="url"
-                          value={newSlide.buttonLink}
-                          onChange={(e) => setNewSlide((prev) => ({ ...prev, buttonLink: e.target.value }))}
-                          placeholder="https://example.com/collection"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          This link will open when the banner is clicked on the homepage.
-                        </p>
+                      <div className="md:col-span-2 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label>Use Category Selector</Label>
+                          <Switch
+                            checked={heroUseSelector}
+                            onCheckedChange={(checked) => {
+                              setHeroUseSelector(checked);
+                              if (checked) {
+                                setNewSlide((prev) => ({ ...prev, buttonLink: '' }));
+                                setHeroLinkIsSelection(true);
+                              } else {
+                                setHeroLinkIsSelection(false);
+                              }
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <Label>Banner Link</Label>
+                          <Input
+                            type="url"
+                            value={newSlide.buttonLink}
+                            onChange={(e) => {
+                              setNewSlide((prev) => ({ ...prev, buttonLink: e.target.value }));
+                              if (e.target.value) {
+                                setHeroLinkSelection({ category: '', subcategory: '', product: '', variant: '' });
+                                setHeroLinkIsSelection(false);
+                              }
+                            }}
+                            placeholder="https://example.com/collection"
+                            readOnly={heroUseSelector}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {heroUseSelector ? 'This link is generated from your selection.' : 'This link will open when the banner is clicked on the homepage.'}
+                          </p>
+                        </div>
+                        {heroUseSelector && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setHeroLinkWizardOpen(true)}
+                          >
+                            Select Category / Product / Variant
+                          </Button>
+                        )}
                       </div>
                     </div>
                     
@@ -816,6 +963,15 @@ export default function ContentPage() {
                         Save Banner
                       </Button>
                     </div>
+                    <LinkWizard
+                      open={heroLinkWizardOpen}
+                      onOpenChange={setHeroLinkWizardOpen}
+                      title="Select Link Target for Banner"
+                      onApply={(link) => {
+                        setHeroLinkIsSelection(true);
+                        setNewSlide((prev) => ({ ...prev, buttonLink: link }));
+                      }}
+                    />
                   </div>
                 </Card>
               )}
@@ -975,14 +1131,47 @@ export default function ContentPage() {
                       <p className="text-destructive text-sm mt-2">{trendUploadError}</p>
                     )}
                   </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-foreground mb-2">Link (optional)</label>
-                    <Input
-                      type="url"
-                      value={newTrend.linkUrl}
-                      onChange={(e) => setNewTrend({ ...newTrend, linkUrl: e.target.value })}
-                      placeholder="https://example.com/collection"
-                    />
+                  <div className="md:col-span-2 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-sm font-medium text-foreground">Use Category Selector</label>
+                      <Switch
+                        checked={trendUseSelector}
+                        onCheckedChange={(checked) => {
+                          setTrendUseSelector(checked);
+                          if (checked) {
+                            setNewTrend((prev) => ({ ...prev, linkUrl: '' }));
+                            setTrendLinkIsSelection(true);
+                          } else {
+                            setTrendLinkIsSelection(false);
+                          }
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Link</label>
+                      <Input
+                        type="url"
+                        value={newTrend.linkUrl}
+                        onChange={(e) => {
+                          setNewTrend({ ...newTrend, linkUrl: e.target.value });
+                          if (e.target.value) {
+                            setTrendLinkSelection({ category: '', subcategory: '', product: '', variant: '' });
+                            setTrendLinkIsSelection(false);
+                          }
+                        }}
+                        placeholder="https://example.com/collection"
+                        readOnly={trendUseSelector}
+                      />
+                    </div>
+                    {trendUseSelector && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setTrendLinkWizardOpen(true)}
+                      >
+                        Select Category / Product / Variant
+                      </Button>
+                    )}
                   </div>
                   <div className="md:col-span-2 flex gap-2">
                     <Button className="bg-primary" onClick={handleAddTrend} disabled={savingTrendId === 'new'}>
@@ -993,6 +1182,15 @@ export default function ContentPage() {
                 </div>
               </Card>
             )}
+            <LinkWizard
+              open={trendLinkWizardOpen}
+              onOpenChange={setTrendLinkWizardOpen}
+              title="Select Link Target for Trend"
+              onApply={(link) => {
+                setTrendLinkIsSelection(true);
+                setNewTrend((prev) => ({ ...prev, linkUrl: link }));
+              }}
+            />
             <div className="grid gap-4">
               {isTrendsLoading && (
                 <div className="text-muted-foreground">Loading trends...</div>
@@ -1016,9 +1214,11 @@ export default function ContentPage() {
                         variant="outline"
                         size="sm"
                         className="gap-1 bg-transparent"
-                        onClick={() => openEditTrend(trend)}
+                        asChild
                       >
-                        <Edit className="w-4 h-4" />
+                        <Link href={`/admin/content/trends/${trend.id}`}>
+                          <Edit className="w-4 h-4" />
+                        </Link>
                       </Button>
                       <Button 
                         variant="outline" 
@@ -1133,66 +1333,7 @@ export default function ContentPage() {
             </AlertDialogContent>
           </AlertDialog>
 
-          <Dialog open={isEditingTrend} onOpenChange={(open) => {
-            setIsEditingTrend(open);
-            if (!open) setEditTrend(null);
-          }}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Edit Trend</DialogTitle>
-              </DialogHeader>
-              {editTrend && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">Title</label>
-                    <Input
-                      value={editTrend.title}
-                      onChange={(e) => setEditTrend({ ...editTrend, title: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">Description</label>
-                    <Textarea
-                      value={editTrend.description}
-                      onChange={(e) => setEditTrend({ ...editTrend, description: e.target.value })}
-                      rows={3}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">Image</label>
-                    <div className="flex items-center gap-4">
-                      <Input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleEditTrendImageUpload}
-                        disabled={uploadingTrendId === editTrend.id}
-                      />
-                      {editTrend.imageUrl && (
-                        <img src={editTrend.imageUrl} alt="Trend" className="w-24 h-16 object-cover rounded" />
-                      )}
-                    </div>
-                    {trendUploadError && (
-                      <p className="text-destructive text-sm mt-2">{trendUploadError}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">Link (optional)</label>
-                    <Input
-                      value={editTrend.linkUrl}
-                      onChange={(e) => setEditTrend({ ...editTrend, linkUrl: e.target.value })}
-                      placeholder="https://example.com/collection"
-                    />
-                  </div>
-                </div>
-              )}
-              <DialogFooter className="mt-4">
-                <Button variant="outline" onClick={() => setIsEditingTrend(false)}>Cancel</Button>
-                <Button className="bg-primary" onClick={handleSaveEditTrend} disabled={!editTrend || savingTrendId === editTrend?.id}>
-                  {savingTrendId === editTrend?.id ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+
 
         </div>
       </AdminLayout>

@@ -139,6 +139,9 @@ export default function CustomerDetailsPage() {
                       <div className="text-right">
                         <p className="font-semibold text-foreground">{formatCurrency(Number(order.total_amount || 0))}</p>
                         <Badge className="mt-1 bg-muted text-foreground">{order.status || 'Pending'}</Badge>
+                        <Link href={`/admin/orders/${order.id}`} className="mt-2 inline-block text-xs text-primary hover:underline">
+                          See details
+                        </Link>
                       </div>
                     </div>
                   ))}
