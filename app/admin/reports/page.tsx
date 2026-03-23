@@ -12,7 +12,7 @@ import { format } from 'date-fns';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 
-type ReportTab = 'daily' | 'monthly' | 'orders' | 'payments' | 'bookkeeping';
+type ReportTab = 'daily' | 'monthly' | 'payments' | 'bookkeeping';
 
 export default function ReportsPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -190,11 +190,11 @@ export default function ReportsPage() {
   }, [orders, allowedReportStatuses]);
 
   const buildVatBuckets = (items: any[]) => {
-    const buckets: Record<number, number> = { 6: 0, 21: 0 };
+    const buckets: Record<number, number> = { 6: 0, 12: 0, 21: 0 };
     items.forEach((item: any) => {
       const rateRaw = item.tax_percent;
       const rate = rateRaw !== null && rateRaw !== undefined && rateRaw !== '' ? Number(rateRaw) : 0;
-      if (rate !== 6 && rate !== 21) return;
+      if (rate !== 6 && rate !== 12 && rate !== 21) return;
       const net = Number(item.total_price || 0);
       buckets[rate] += net * (rate / 100);
     });
@@ -202,35 +202,37 @@ export default function ReportsPage() {
   };
 
   const bookkeepingDailyRows = useMemo(() => {
-    const byDate: Record<string, { date: string; turnover: number; vat6: number; vat21: number }> = {};
+    const byDate: Record<string, { date: string; turnover: number; vat6: number; vat12: number; vat21: number }> = {};
     reportOrders.forEach((order) => {
       if (!order.created_at) return;
       const dateKey = new Date(order.created_at).toISOString().slice(0, 10);
       if (!byDate[dateKey]) {
-        byDate[dateKey] = { date: dateKey, turnover: 0, vat6: 0, vat21: 0 };
+        byDate[dateKey] = { date: dateKey, turnover: 0, vat6: 0, vat12: 0, vat21: 0 };
       }
       byDate[dateKey].turnover += Number(order.total_amount || 0);
       const items = Array.isArray(order.items) ? order.items : [];
       const buckets = buildVatBuckets(items);
       byDate[dateKey].vat6 += buckets[6] || 0;
+      byDate[dateKey].vat12 += buckets[12] || 0;
       byDate[dateKey].vat21 += buckets[21] || 0;
     });
     return Object.values(byDate).sort((a, b) => (a.date > b.date ? 1 : -1));
   }, [reportOrders]);
 
   const bookkeepingMonthlyRows = useMemo(() => {
-    const byMonth: Record<string, { month: string; turnover: number; vat6: number; vat21: number }> = {};
+    const byMonth: Record<string, { month: string; turnover: number; vat6: number; vat12: number; vat21: number }> = {};
     reportOrders.forEach((order) => {
       if (!order.created_at) return;
       const created = new Date(order.created_at);
       const key = `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, '0')}`;
       if (!byMonth[key]) {
-        byMonth[key] = { month: key, turnover: 0, vat6: 0, vat21: 0 };
+        byMonth[key] = { month: key, turnover: 0, vat6: 0, vat12: 0, vat21: 0 };
       }
       byMonth[key].turnover += Number(order.total_amount || 0);
       const items = Array.isArray(order.items) ? order.items : [];
       const buckets = buildVatBuckets(items);
       byMonth[key].vat6 += buckets[6] || 0;
+      byMonth[key].vat12 += buckets[12] || 0;
       byMonth[key].vat21 += buckets[21] || 0;
     });
     return Object.values(byMonth).sort((a, b) => (a.month > b.month ? 1 : -1));
@@ -478,6 +480,19 @@ export default function ReportsPage() {
     };
   };
 
+  const monthlyDailySummaryRows = useMemo(() => {
+    const byDate: Record<string, any[]> = {};
+    reportOrders.forEach((order) => {
+      if (!order.created_at) return;
+      const dateKey = new Date(order.created_at).toISOString().slice(0, 10);
+      if (!byDate[dateKey]) byDate[dateKey] = [];
+      byDate[dateKey].push(order);
+    });
+    return Object.keys(byDate)
+      .sort()
+      .map((dateKey) => buildSummaryRow(dateKey, byDate[dateKey] || []));
+  }, [reportOrders]);
+
   const exportSummaryRows = (fileName: string, rows: Array<{ label: string; turnover: number; vat6: number; vat12: number; vat21: number; totalVat: number }>) => {
     downloadCsv(
       fileName,
@@ -505,7 +520,6 @@ export default function ReportsPage() {
           <Button variant={tab === 'daily' ? 'default' : 'outline'} onClick={() => setTab('daily')}>Daily Sales</Button>
           <Button variant={tab === 'monthly' ? 'default' : 'outline'} onClick={() => setTab('monthly')}>Monthly Sales</Button>
           <Button variant={tab === 'bookkeeping' ? 'default' : 'outline'} onClick={() => setTab('bookkeeping')}>Bookkeeping</Button>
-          <Button variant={tab === 'orders' ? 'default' : 'outline'} onClick={() => setTab('orders')}>Orders</Button>
           <Button variant={tab === 'payments' ? 'default' : 'outline'} onClick={() => setTab('payments')}>Payments Received</Button>
         </div>
 
@@ -521,19 +535,10 @@ export default function ReportsPage() {
                   <Download className="w-4 h-4" />
                   Export Daily Summary CSV
                 </Button>
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  onClick={() => exportOrderDetailRows(`daily-orders-${todayKey}.csv`, reportOrders)}
-                  disabled={reportOrders.length === 0}
-                >
-                  <Download className="w-4 h-4" />
-                  Export Daily Orders CSV
-                </Button>
               </div>
             </div>
             <SummaryCards summary={summary} />
-            <OrderDetailTable rows={buildOrderReportRows(reportOrders)} isLoading={isReportLoading} />
+            <OrderSummaryTable rows={[buildSummaryRow(todayKey, reportOrders)]} />
           </div>
         )}
 
@@ -554,20 +559,11 @@ export default function ReportsPage() {
               <div className="flex flex-wrap gap-2">
                 <Button
                   className="gap-2"
-                  onClick={() => exportSummaryRows(`monthly-summary-${monthlyKey || defaultMonthKey}.csv`, [buildSummaryRow(monthlyKey || defaultMonthKey, reportOrders)])}
-                  disabled={reportOrders.length === 0}
+                  onClick={() => exportSummaryRows(`monthly-summary-${monthlyKey || defaultMonthKey}.csv`, monthlyDailySummaryRows)}
+                  disabled={monthlyDailySummaryRows.length === 0}
                 >
                   <Download className="w-4 h-4" />
                   Export Monthly Summary CSV
-                </Button>
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  onClick={() => exportOrderDetailRows(`monthly-orders-${monthlyKey || defaultMonthKey}.csv`, reportOrders)}
-                  disabled={reportOrders.length === 0}
-                >
-                  <Download className="w-4 h-4" />
-                  Export Monthly Orders CSV
                 </Button>
               </div>
             </div>
@@ -604,19 +600,19 @@ export default function ReportsPage() {
                   const fromDate = new Date(range.from);
                   const toDate = new Date(rangeTo.to);
                   const rows: Array<{ label: string; turnover: number; vat6: number; vat12: number; vat21: number; totalVat: number }> = [];
-                  const cursor = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
-                  const end = new Date(toDate.getFullYear(), toDate.getMonth(), 1);
+                  const cursor = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
+                  const end = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate());
                   while (cursor <= end) {
-                    const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
-                    const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-                    const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59, 999);
-                    const monthRows = filtered.filter((order: any) => {
+                    const key = cursor.toISOString().slice(0, 10);
+                    const dayStart = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), 0, 0, 0, 0);
+                    const dayEnd = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), 23, 59, 59, 999);
+                    const dayRows = filtered.filter((order: any) => {
                       if (!order.created_at) return false;
                       const created = new Date(order.created_at);
-                      return created >= monthStart && created <= monthEnd;
+                      return created >= dayStart && created <= dayEnd;
                     });
-                    rows.push(buildSummaryRow(key, monthRows));
-                    cursor.setMonth(cursor.getMonth() + 1);
+                    rows.push(buildSummaryRow(key, dayRows));
+                    cursor.setDate(cursor.getDate() + 1);
                   }
                   exportSummaryRows(`monthly-range-${range.from}-to-${rangeTo.to}.csv`, rows);
                 }}
@@ -627,77 +623,10 @@ export default function ReportsPage() {
               </Button>
             </div>
             <SummaryCards summary={summary} />
-            <OrderDetailTable rows={buildOrderReportRows(reportOrders)} isLoading={isReportLoading} />
+            <OrderSummaryTable rows={monthlyDailySummaryRows} />
           </div>
         )}
 
-        {tab === 'orders' && (
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-3 items-end">
-              <div>
-                <label className="text-xs text-muted-foreground">Status</label>
-                <select className="mt-1 px-3 py-2 rounded-md bg-card border border-border text-foreground text-sm" value={ordersStatus} onChange={(e) => setOrdersStatus(e.target.value)}>
-                  <option value="">All</option>
-                  <option value="pending">Pending</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">From</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn('mt-1 w-[180px] justify-start text-left font-normal', !ordersFrom && 'text-muted-foreground')}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {ordersFrom ? format(ordersFrom, 'PPP') : 'Pick a date'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={ordersFrom} onSelect={setOrdersFrom} initialFocus />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">To</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn('mt-1 w-[180px] justify-start text-left font-normal', !ordersTo && 'text-muted-foreground')}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {ordersTo ? format(ordersTo, 'PPP') : 'Pick a date'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={ordersTo} onSelect={setOrdersTo} initialFocus />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <label className="text-xs text-muted-foreground">Search</label>
-                <input type="text" placeholder="Order ID or customer name" className="mt-1 w-full px-3 py-2 rounded-md bg-card border border-border text-foreground text-sm" value={ordersSearch} onChange={(e) => setOrdersSearch(e.target.value)} />
-              </div>
-              <Button className="gap-2" onClick={() => exportOrderSummary('orders-report.csv', filteredOrders)} disabled={filteredOrders.length === 0}>
-                <Download className="w-4 h-4" />
-                Export Orders CSV
-              </Button>
-              <Button variant="outline" className="gap-2" onClick={() => exportDetailedOrders('orders-detailed.csv', filteredOrders)} disabled={filteredOrders.length === 0}>
-                <Download className="w-4 h-4" />
-                Export Detailed CSV
-              </Button>
-              <Button variant="outline" className="gap-2" onClick={() => exportVatSummary('orders-vat-summary.csv')} disabled={vatSummary.length === 0}>
-                <Download className="w-4 h-4" />
-                Export VAT CSV
-              </Button>
-            </div>
-            <SummaryCards summary={summary} />
-            <OrderDetailTable rows={buildOrderReportRows(filteredOrders)} isLoading={isReportLoading} />
-          </div>
-        )}
 
         {tab === 'bookkeeping' && (
           <div className="space-y-4">
@@ -1010,7 +939,7 @@ function BookkeepingTable({
   rows,
   mode
 }: {
-  rows: Array<{ date?: string; month?: string; turnover: number; vat6: number; vat21: number }>;
+  rows: Array<{ date?: string; month?: string; turnover: number; vat6: number; vat12: number; vat21: number }>;
   mode: 'daily' | 'monthly';
 }) {
   const label = mode === 'daily' ? 'Date' : 'Month';
@@ -1023,13 +952,14 @@ function BookkeepingTable({
               <th className="text-left px-4 py-3 font-medium whitespace-nowrap">{label}</th>
               <th className="text-right px-4 py-3 font-medium whitespace-nowrap">Total Sales</th>
               <th className="text-right px-4 py-3 font-medium whitespace-nowrap">VAT 6%</th>
+              <th className="text-right px-4 py-3 font-medium whitespace-nowrap">VAT 12%</th>
               <th className="text-right px-4 py-3 font-medium whitespace-nowrap">VAT 21%</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-muted-foreground">
+                <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
                   No bookkeeping data found.
                 </td>
               </tr>
@@ -1039,6 +969,7 @@ function BookkeepingTable({
                   <td className="px-4 py-3 text-foreground whitespace-nowrap">{row.date || row.month}</td>
                   <td className="px-4 py-3 text-right text-foreground whitespace-nowrap">{formatCurrency(row.turnover)}</td>
                   <td className="px-4 py-3 text-right text-foreground whitespace-nowrap">{formatCurrency(row.vat6)}</td>
+                  <td className="px-4 py-3 text-right text-foreground whitespace-nowrap">{formatCurrency(row.vat12)}</td>
                   <td className="px-4 py-3 text-right text-foreground whitespace-nowrap">{formatCurrency(row.vat21)}</td>
                 </tr>
               ))

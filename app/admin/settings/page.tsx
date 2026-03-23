@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Building2, Upload, Truck, Receipt, Mail, Phone, Pencil, ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { Building2, Upload, Truck, Receipt, Mail, Phone, Pencil, ShieldCheck, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -56,6 +56,10 @@ export default function SettingsPage() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showMaintenanceConfirm, setShowMaintenanceConfirm] = useState(false);
+  const [pendingMaintenanceValue, setPendingMaintenanceValue] = useState<
+    boolean | null
+  >(null);
   const [emailDraft, setEmailDraft] = useState({
     smtpEmail: initialForm.smtpEmail,
     smtpPassword: initialForm.smtpPassword,
@@ -78,6 +82,12 @@ export default function SettingsPage() {
 
   const handleChange = (key: keyof typeof initialForm, value: string | boolean) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleMaintenanceToggle = (checked: boolean) => {
+    if (checked === form.maintenanceEnabled) return;
+    setPendingMaintenanceValue(checked);
+    setShowMaintenanceConfirm(true);
   };
 
   useEffect(() => {
@@ -503,7 +513,7 @@ export default function SettingsPage() {
                   </div>
                   <Switch
                     checked={form.maintenanceEnabled}
-                    onCheckedChange={(checked) => handleChange('maintenanceEnabled', checked)}
+                    onCheckedChange={(checked) => handleMaintenanceToggle(checked)}
                     disabled={isLoading}
                   />
                 </div>
@@ -765,6 +775,58 @@ export default function SettingsPage() {
             </Button>
             <Button onClick={handlePasswordUpdate} disabled={isUpdatingPassword}>
               {isUpdatingPassword ? 'Updating...' : 'Update & Sign Out'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showMaintenanceConfirm} onOpenChange={setShowMaintenanceConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {pendingMaintenanceValue ? 'Enable maintenance mode?' : 'Disable maintenance mode?'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
+              <AlertTriangle className="h-5 w-5 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium">
+                  {pendingMaintenanceValue ? 'This will take the storefront offline.' : 'This will bring the storefront back online.'}
+                </p>
+                <p className="text-amber-800/90">
+                  {pendingMaintenanceValue
+                    ? 'Customers will see the maintenance screen until you disable it.'
+                    : 'Customers will regain access immediately.'}
+                </p>
+              </div>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {pendingMaintenanceValue
+                ? 'You can disable it anytime from this page.'
+                : 'Orders, browsing, and checkout will resume as normal.'}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowMaintenanceConfirm(false);
+                setPendingMaintenanceValue(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={pendingMaintenanceValue ? 'destructive' : 'default'}
+              onClick={() => {
+                if (pendingMaintenanceValue !== null) {
+                  handleChange('maintenanceEnabled', pendingMaintenanceValue);
+                }
+                setShowMaintenanceConfirm(false);
+                setPendingMaintenanceValue(null);
+              }}
+            >
+              {pendingMaintenanceValue ? 'Enable' : 'Disable'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -177,6 +177,20 @@ export default function OrderDetailsPage() {
     return cleaned.replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
+  const statusKey = (value: string) =>
+    String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+  const statusIndex = (value: string) => {
+    const key = statusKey(value);
+    return orderStatuses.findIndex((s) => statusKey(s) === key);
+  };
+
+  const canonicalStatus = (value: string) => {
+    const key = statusKey(value);
+    const match = orderStatuses.find((s) => statusKey(s) === key);
+    return match || normalizeStatus(value);
+  };
+
   const splitPaymentMethod = (raw: string | null | undefined, brand?: string | null, methodType?: string | null) => {
     if (brand) return { gateway: 'Worldline', detail: String(brand).toUpperCase() };
     if (methodType) return { gateway: 'Worldline', detail: String(methodType).toUpperCase() };
@@ -200,7 +214,7 @@ export default function OrderDetailsPage() {
       const result = await response.json();
       if (!result.success) throw new Error(result.error || 'Failed to fetch');
       setOrder(result.data);
-      const status = normalizeStatus(result.data.status || 'Pending');
+      const status = canonicalStatus(result.data.status || 'Pending');
       setCurrentStatus(status);
       setPendingStatus(status);
     } catch (err: any) {
@@ -297,6 +311,7 @@ export default function OrderDetailsPage() {
       }
     };
 
+
   return (
     <AdminLayout>
       <div className="space-y-6 max-w-6xl">
@@ -312,8 +327,8 @@ export default function OrderDetailsPage() {
                 <h1 className="text-2xl font-semibold text-foreground">
                   Order {order?.order_number || orderId}
                 </h1>
-                <Badge className={`border border-transparent ${statusTone[normalizeStatus(currentStatus)] || 'bg-muted text-foreground'}`}>
-                  {normalizeStatus(currentStatus)}
+                <Badge className={`border border-transparent ${statusTone[canonicalStatus(currentStatus)] || 'bg-muted text-foreground'}`}>
+                  {canonicalStatus(currentStatus)}
                 </Badge>
               </div>
               <p className="text-muted-foreground text-sm mt-1">
@@ -415,8 +430,8 @@ export default function OrderDetailsPage() {
               <div className="bg-card border border-border rounded-lg p-6">
                 <div className="flex items-center justify-between gap-4">
                   <h2 className="text-base font-semibold text-foreground">Order Status</h2>
-                  <Badge className={`border border-transparent ${statusTone[normalizeStatus(currentStatus)] || 'bg-muted text-foreground'}`}>
-                    {normalizeStatus(currentStatus)}
+                  <Badge className={`border border-transparent ${statusTone[canonicalStatus(currentStatus)] || 'bg-muted text-foreground'}`}>
+                    {canonicalStatus(currentStatus)}
                   </Badge>
               </div>
               {isLoading && <div className="text-sm text-muted-foreground mt-4">Loading...</div>}
@@ -424,10 +439,11 @@ export default function OrderDetailsPage() {
                 <div className="mt-5">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
                     {orderStatuses.map((status, index) => {
-                      const activeStatus = normalizeStatus(currentStatus);
-                      const isComplete = orderStatuses.indexOf(activeStatus) > index;
-                      const isActive = status === activeStatus;
-                      const isUpcoming = orderStatuses.indexOf(activeStatus) < index;
+                      const activeStatus = canonicalStatus(currentStatus);
+                      const activeIndex = statusIndex(activeStatus);
+                      const isComplete = activeIndex > index;
+                      const isActive = statusKey(status) === statusKey(activeStatus);
+                      const isUpcoming = activeIndex !== -1 && activeIndex < index;
                       return (
                         <div key={status} className="relative flex flex-col items-center gap-2">
                           <div className="relative flex items-center w-full">
@@ -481,8 +497,8 @@ export default function OrderDetailsPage() {
                   Update Status
                 </label>
                   <div className="flex flex-col sm:flex-row gap-3">
-                    <Select value={normalizeStatus(pendingStatus)} onValueChange={setPendingStatus}>
-                      <SelectTrigger className="w-full bg-background">
+                    <Select value={canonicalStatus(pendingStatus)} onValueChange={setPendingStatus}>
+                    <SelectTrigger className="w-full bg-background text-foreground">
                         <SelectValue placeholder="Select status" />
                       </SelectTrigger>
                       <SelectContent>
@@ -663,9 +679,9 @@ export default function OrderDetailsPage() {
             <div className="bg-card border border-border rounded-lg p-6">
               <h2 className="text-base font-semibold text-foreground mb-4">Timeline</h2>
               <div className="space-y-3 text-sm">
-                {(order?.status_history || []).map((entry: any) => (
-                  <div key={entry.id}>
-                    <p className="font-medium text-foreground">{entry.status}</p>
+                    {(order?.status_history || []).map((entry: any) => (
+                      <div key={entry.id}>
+                    <p className="font-medium text-foreground">{canonicalStatus(entry.status)}</p>
                     <p className="text-xs text-muted-foreground">
                       {entry.changed_at ? new Date(entry.changed_at).toLocaleString() : ''}
                     </p>
