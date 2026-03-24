@@ -20,6 +20,7 @@ import {
   Clock,
   Activity,
   ScrollText,
+  BookOpen,
   Trash2,
   Star
 } from 'lucide-react';
@@ -76,6 +77,11 @@ const navItems = [
     label: 'Content',
     href: '/admin/content',
     icon: FileText,
+  },
+  {
+    label: 'Docs',
+    href: '/admin/docs',
+    icon: BookOpen,
   },
   {
     label: 'Home Sections',
