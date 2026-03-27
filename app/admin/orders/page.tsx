@@ -301,12 +301,14 @@ export default function OrdersPage() {
                             {order.created_at ? new Date(order.created_at).toLocaleDateString() : '-'}
                           </td>
                           <td className="px-4 py-2">
-                            <Link
-                              href={`/admin/orders/${order.id}`}
-                              className="inline-flex items-center gap-3 text-primary hover:text-primary/80 font-medium"
-                            >
-                              View
-                            </Link>
+                            <div className="flex items-center gap-3">
+                              <Link
+                                href={`/admin/orders/${order.id}`}
+                                className="inline-flex items-center gap-3 text-primary hover:text-primary/80 font-medium"
+                              >
+                                View
+                              </Link>
+                            </div>
                           </td>
                         </tr>
                       ))}

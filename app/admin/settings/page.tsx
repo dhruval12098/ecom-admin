@@ -23,11 +23,6 @@ const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
     phone: '+91 98765 43210',
       supportEmail: 'support@tulsiindiangrocerystore.com',
     address: '221B Baker Street, London',
-    smtpEmail: '',
-    smtpPassword: '',
-    smtpHost: '',
-    smtpPort: '587',
-    smtpSecure: false,
     taxRate: '5',
     currency: 'EUR',
     vatNumber: '',
@@ -44,7 +39,6 @@ export default function SettingsPage() {
   const [initialValues, setInitialValues] = useState(initialForm);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditingStoreInfo, setIsEditingStoreInfo] = useState(false);
-  const [isEditingEmailConfig, setIsEditingEmailConfig] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [adminEmail, setAdminEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -60,14 +54,6 @@ export default function SettingsPage() {
   const [pendingMaintenanceValue, setPendingMaintenanceValue] = useState<
     boolean | null
   >(null);
-  const [emailDraft, setEmailDraft] = useState({
-    smtpEmail: initialForm.smtpEmail,
-    smtpPassword: initialForm.smtpPassword,
-    smtpHost: initialForm.smtpHost,
-    smtpPort: initialForm.smtpPort,
-    smtpSecure: initialForm.smtpSecure
-  });
-
   const isDirty = useMemo(
     () => JSON.stringify(form) !== JSON.stringify(initialValues),
     [form, initialValues]
@@ -106,11 +92,6 @@ export default function SettingsPage() {
             supportEmail: data.support_email ?? initialForm.supportEmail,
             phone: data.phone ?? initialForm.phone,
             address: data.address ?? initialForm.address,
-            smtpEmail: data.smtp_email ?? initialForm.smtpEmail,
-            smtpPassword: data.smtp_password ?? initialForm.smtpPassword,
-            smtpHost: data.smtp_host ?? initialForm.smtpHost,
-            smtpPort: data.smtp_port !== null && data.smtp_port !== undefined ? String(data.smtp_port) : initialForm.smtpPort,
-            smtpSecure: Boolean(data.smtp_secure),
             taxRate: data.tax_rate !== null && data.tax_rate !== undefined ? String(data.tax_rate) : initialForm.taxRate,
             currency: data.currency_code ?? initialForm.currency,
             vatNumber: data.vat_number ?? initialForm.vatNumber,
@@ -121,13 +102,6 @@ export default function SettingsPage() {
         };
         setForm(next);
         setInitialValues(next);
-        setEmailDraft({
-          smtpEmail: next.smtpEmail,
-          smtpPassword: next.smtpPassword,
-          smtpHost: next.smtpHost,
-          smtpPort: next.smtpPort,
-          smtpSecure: next.smtpSecure
-        });
       } catch (error: any) {
         toast({
           title: 'Failed to load settings',
@@ -156,11 +130,6 @@ export default function SettingsPage() {
         support_email: nextForm.supportEmail,
         phone: nextForm.phone,
         address: nextForm.address,
-        smtp_email: nextForm.smtpEmail,
-        smtp_password: nextForm.smtpPassword,
-        smtp_host: nextForm.smtpHost,
-        smtp_port: nextForm.smtpPort ? Number(nextForm.smtpPort) : null,
-        smtp_secure: nextForm.smtpSecure,
         tax_rate: nextForm.taxRate ? Number(nextForm.taxRate) : null,
         currency_code: nextForm.currency,
         vat_number: nextForm.vatNumber || null,
@@ -195,20 +164,6 @@ export default function SettingsPage() {
   const handleStoreInfoSave = async () => {
     const ok = await handleSave();
     if (ok) setIsEditingStoreInfo(false);
-  };
-
-  const handleEmailConfigSave = async () => {
-    const next = {
-      ...form,
-      smtpEmail: emailDraft.smtpEmail || '',
-      smtpPassword: emailDraft.smtpPassword || '',
-      smtpHost: emailDraft.smtpHost || '',
-      smtpPort: emailDraft.smtpPort || '',
-      smtpSecure: Boolean(emailDraft.smtpSecure)
-    };
-    setForm(next);
-    const ok = await handleSave(next);
-    if (ok) setIsEditingEmailConfig(false);
   };
 
   const handlePasswordUpdate = async () => {
@@ -563,49 +518,6 @@ export default function SettingsPage() {
               <Card>
                 <CardHeader className="flex flex-row items-start justify-between gap-4">
                   <div>
-                    <CardTitle>Email Configuration</CardTitle>
-                    <CardDescription>SMTP settings used to send transactional emails.</CardDescription>
-                  </div>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setEmailDraft({
-                      smtpEmail: form.smtpEmail || '',
-                      smtpPassword: form.smtpPassword || '',
-                      smtpHost: form.smtpHost || '',
-                      smtpPort: form.smtpPort || '',
-                      smtpSecure: Boolean(form.smtpSecure)
-                    });
-                    setIsEditingEmailConfig(true);
-                  }}
-                  disabled={isLoading}
-                >
-                  Edit
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm text-muted-foreground">
-                <div className="flex items-center justify-between">
-                  <span>SMTP Email</span>
-                  <span className="text-foreground">{form.smtpEmail || 'Not set'}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>SMTP Host</span>
-                  <span className="text-foreground">{form.smtpHost || 'Not set'}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>SMTP Port</span>
-                  <span className="text-foreground">{form.smtpPort || 'Not set'}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>SSL/TLS</span>
-                  <span className="text-foreground">{form.smtpSecure ? 'Enabled' : 'Disabled'}</span>
-                </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-start justify-between gap-4">
-                  <div>
                     <CardTitle>Admin Access</CardTitle>
                     <CardDescription>Admin email and password are hidden.</CardDescription>
                   </div>
@@ -627,72 +539,6 @@ export default function SettingsPage() {
               </Card>
             </div>
           </div>
-      <Dialog open={isEditingEmailConfig} onOpenChange={setIsEditingEmailConfig}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Email Configuration</DialogTitle>
-            </DialogHeader>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">SMTP Email</label>
-                <Input
-                  value={emailDraft.smtpEmail ?? ''}
-                  onChange={(e) => setEmailDraft((prev) => ({ ...prev, smtpEmail: e.target.value }))}
-                  placeholder="noreply@yourdomain.com"
-                  disabled={isLoading}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">SMTP App Password</label>
-                <Input
-                  value={emailDraft.smtpPassword ?? ''}
-                  onChange={(e) => setEmailDraft((prev) => ({ ...prev, smtpPassword: e.target.value }))}
-                  type="password"
-                  placeholder="App password"
-                  disabled={isLoading}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">SMTP Host</label>
-                <Input
-                  value={emailDraft.smtpHost ?? ''}
-                  onChange={(e) => setEmailDraft((prev) => ({ ...prev, smtpHost: e.target.value }))}
-                  placeholder="smtp.gmail.com"
-                  disabled={isLoading}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">SMTP Port</label>
-                <Input
-                  value={emailDraft.smtpPort ?? ''}
-                  onChange={(e) => setEmailDraft((prev) => ({ ...prev, smtpPort: e.target.value }))}
-                  placeholder="587"
-                  disabled={isLoading}
-                />
-              </div>
-              <div className="md:col-span-2 flex items-center justify-between rounded-lg border border-border p-4">
-                <div>
-                  <p className="font-medium text-foreground">Use SSL/TLS</p>
-                  <p className="text-sm text-muted-foreground">Enable for port 465 or secure SMTP servers.</p>
-                </div>
-                <Switch
-                  checked={Boolean(emailDraft.smtpSecure)}
-                  onCheckedChange={(checked) => setEmailDraft((prev) => ({ ...prev, smtpSecure: checked }))}
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
-            <DialogFooter className="mt-4">
-              <Button variant="outline" onClick={() => setIsEditingEmailConfig(false)} disabled={isLoading}>
-                Cancel
-              </Button>
-              <Button onClick={handleEmailConfigSave} disabled={isLoading}>
-                Save
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-      </Dialog>
-
       <Dialog open={showAdminDialog} onOpenChange={setShowAdminDialog}>
         <DialogContent>
           <DialogHeader>
