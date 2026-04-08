@@ -21,6 +21,8 @@ export default function ReportsPage() {
   const [isReportLoading, setIsReportLoading] = useState(true);
   const [tab, setTab] = useState<ReportTab>('daily');
   const [bookkeepingTab, setBookkeepingTab] = useState<'daily' | 'monthly'>('daily');
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const [paymentsPageSize, setPaymentsPageSize] = useState(25);
   const allowedReportStatuses = useMemo(
     () => new Set(['confirmed', 'preparing', 'out for delivery', 'delivered']),
     []
@@ -171,6 +173,23 @@ export default function ReportsPage() {
       return true;
     });
   }, [receivedPayments, paymentsFrom, paymentsTo]);
+
+  useEffect(() => {
+    if (tab !== 'payments') return;
+    setPaymentsPage(1);
+  }, [tab, paymentsFrom, paymentsTo, paymentsPageSize]);
+
+  const paymentsPageCount = useMemo(() => {
+    const size = Math.max(1, Number(paymentsPageSize) || 25);
+    return Math.max(1, Math.ceil(filteredPayments.length / size));
+  }, [filteredPayments.length, paymentsPageSize]);
+
+  const paginatedPayments = useMemo(() => {
+    const size = Math.max(1, Number(paymentsPageSize) || 25);
+    const safePage = Math.min(Math.max(1, paymentsPage), paymentsPageCount);
+    const start = (safePage - 1) * size;
+    return filteredPayments.slice(start, start + size);
+  }, [filteredPayments, paymentsPage, paymentsPageCount, paymentsPageSize]);
 
   const customerNameByOrder = useMemo(() => {
     const map: Record<string, string> = {};
@@ -704,6 +723,47 @@ export default function ReportsPage() {
                 Export Payments CSV
               </Button>
             </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span>Rows</span>
+                <select
+                  className="h-9 rounded-md bg-card border border-border px-2 text-sm text-foreground"
+                  value={paymentsPageSize}
+                  onChange={(e) => setPaymentsPageSize(Number(e.target.value) || 25)}
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span>
+                  {filteredPayments.length === 0
+                    ? '0 results'
+                    : `${Math.min((paymentsPage - 1) * paymentsPageSize + 1, filteredPayments.length)}-${Math.min(paymentsPage * paymentsPageSize, filteredPayments.length)} of ${filteredPayments.length}`}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={paymentsPage <= 1}
+                  onClick={() => setPaymentsPage((p) => Math.max(1, p - 1))}
+                >
+                  Prev
+                </Button>
+                <span>
+                  Page {Math.min(Math.max(1, paymentsPage), paymentsPageCount)} of {paymentsPageCount}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={paymentsPage >= paymentsPageCount}
+                  onClick={() => setPaymentsPage((p) => Math.min(paymentsPageCount, p + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
             <div className="bg-card border border-border rounded-lg overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
@@ -719,14 +779,14 @@ export default function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredPayments.length === 0 ? (
+                    {paginatedPayments.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">
                           {isLoading ? 'Loading payments...' : 'No received payments found.'}
                         </td>
                       </tr>
                     ) : (
-                      filteredPayments.map((p) => (
+                      paginatedPayments.map((p) => (
                         <tr key={p.id} className="border-t border-border">
                           <td className="px-6 py-3 text-foreground whitespace-nowrap">{p.order_id || '-'}</td>
                           <td className="px-6 py-3 text-foreground whitespace-nowrap">{customerNameByOrder[String(p.order_id || '')] || '-'}</td>

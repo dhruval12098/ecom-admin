@@ -6,7 +6,6 @@ import { RecentOrdersTable } from '@/components/dashboard/recent-orders-table';
 import { OrdersChart } from '@/components/dashboard/orders-chart';
 import { BestSellingProducts } from '@/components/dashboard/best-selling-products';
 import {
-
   ShoppingCart,
   TrendingUp,
   Package,
@@ -24,6 +23,7 @@ export default function DashboardPage() {
   const [orderItems, setOrderItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [itemsLoading, setItemsLoading] = useState(true);
+  const [range, setRange] = useState<'day' | 'week' | 'month'>('week');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -85,35 +85,69 @@ export default function DashboardPage() {
     fetchOrderItems();
   }, [orders]);
 
-  const monthKey = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}`;
+  const rangeLabel = range === 'day' ? 'Today' : range === 'week' ? 'This Week' : 'This Month';
 
-  const monthStats = useMemo(() => {
+  const rangeBounds = useMemo(() => {
     const now = new Date();
-    const currentKey = monthKey(now);
-    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const prevKey = monthKey(prev);
+    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+    const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+    const startOfWeek = (d: Date) => {
+      const copy = startOfDay(d);
+      const day = copy.getDay(); // 0=Sun
+      const mondayOffset = (day + 6) % 7;
+      copy.setDate(copy.getDate() - mondayOffset);
+      return copy;
+    };
+    const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
 
+    if (range === 'day') {
+      const start = startOfDay(now);
+      const end = now;
+      const prevDay = new Date(start);
+      prevDay.setDate(prevDay.getDate() - 1);
+      return {
+        start,
+        end,
+        prevStart: startOfDay(prevDay),
+        prevEnd: endOfDay(prevDay)
+      };
+    }
+
+    if (range === 'week') {
+      const start = startOfWeek(now);
+      const end = now;
+      const prevStart = new Date(start);
+      prevStart.setDate(prevStart.getDate() - 7);
+      const prevEnd = new Date(start.getTime() - 1);
+      return { start, end, prevStart, prevEnd };
+    }
+
+    const start = startOfMonth(now);
+    const end = now;
+    const prevStart = new Date(start.getFullYear(), start.getMonth() - 1, 1, 0, 0, 0, 0);
+    const prevEnd = new Date(start.getTime() - 1);
+    return { start, end, prevStart, prevEnd };
+  }, [range]);
+
+  const rangeStats = useMemo(() => {
     let currentOrders = 0;
     let prevOrders = 0;
     let currentRevenue = 0;
     let prevRevenue = 0;
-
     orders.forEach((order) => {
       if (!order.created_at) return;
       const created = new Date(order.created_at);
-      const key = monthKey(created);
       const amount = Number(order.total_amount || 0);
-      if (key === currentKey) {
+      if (created >= rangeBounds.start && created <= rangeBounds.end) {
         currentOrders += 1;
         currentRevenue += amount;
-      } else if (key === prevKey) {
+      } else if (created >= rangeBounds.prevStart && created <= rangeBounds.prevEnd) {
         prevOrders += 1;
         prevRevenue += amount;
       }
     });
-
     return { currentOrders, prevOrders, currentRevenue, prevRevenue };
-  }, [orders]);
+  }, [orders, rangeBounds]);
 
   const formatChange = (current: number, previous: number) => {
     if (previous <= 0) return '0%';
@@ -141,11 +175,6 @@ export default function DashboardPage() {
     return { todayOrders, yesterdayOrders };
   }, [orders]);
 
-  const totalRevenue = useMemo(
-    () => orders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0),
-    [orders]
-  );
-
   const totalUsers = useMemo(() => {
     const ids = new Set<string>();
     orders.forEach((order) => {
@@ -155,12 +184,24 @@ export default function DashboardPage() {
     return ids.size;
   }, [orders]);
 
+  const rangeUsers = useMemo(() => {
+    const ids = new Set<string>();
+    orders.forEach((order) => {
+      if (!order.created_at) return;
+      const created = new Date(order.created_at);
+      if (created < rangeBounds.start || created > rangeBounds.end) return;
+      const key = String(order.customer_id || order.customer_email || order.customer_phone || order.customer_name || '').trim();
+      if (key) ids.add(key);
+    });
+    return ids.size;
+  }, [orders, rangeBounds]);
+
   const lowStockCount = useMemo(() => {
     return products.filter((p) => Number(p.stock_quantity || 0) <= 5 || p.in_stock === false).length;
   }, [products]);
 
   const chartData = useMemo(() => {
-    const days = 7;
+    const days = range === 'day' ? 1 : range === 'week' ? 7 : 30;
     const buckets: Record<string, { orders: number; revenue: number }> = {};
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date();
@@ -182,7 +223,7 @@ export default function DashboardPage() {
       orders: values.orders,
       revenue: values.revenue
     }));
-  }, [orders]);
+  }, [orders, range]);
 
   const bestSellers = useMemo(() => {
     const byProduct: Record<string, { name: string; sales: number; revenue: number }> = {};
@@ -201,25 +242,39 @@ export default function DashboardPage() {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-semibold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Welcome back! Here's your business overview.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-semibold text-foreground">Dashboard</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Welcome back! Here's your business overview.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted-foreground">Range</label>
+            <select
+              className="h-9 rounded-md bg-card border border-border px-3 text-sm text-foreground"
+              value={range}
+              onChange={(e) => setRange(e.target.value as 'day' | 'week' | 'month')}
+            >
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month">Month</option>
+            </select>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard
-            title="Total Orders"
-            value={`${orders.length}`}
-            change={formatChange(monthStats.currentOrders, monthStats.prevOrders)}
+            title={`Orders (${rangeLabel})`}
+            value={`${rangeStats.currentOrders}`}
+            change={formatChange(rangeStats.currentOrders, rangeStats.prevOrders)}
             icon={ShoppingCart}
             color="blue"
           />
           <StatCard
-            title="Total Revenue"
-            value={formatCurrency(totalRevenue)}
-            change={formatChange(monthStats.currentRevenue, monthStats.prevRevenue)}
+            title={`Revenue (${rangeLabel})`}
+            value={formatCurrency(rangeStats.currentRevenue)}
+            change={formatChange(rangeStats.currentRevenue, rangeStats.prevRevenue)}
             icon={TrendingUp}
             color="green"
           />
@@ -231,8 +286,8 @@ export default function DashboardPage() {
             color="purple"
           />
           <StatCard
-            title="Total Users"
-            value={`${totalUsers}`}
+            title={`Customers (${rangeLabel})`}
+            value={`${rangeUsers}`}
             change="0%"
             icon={Users}
             color="orange"
