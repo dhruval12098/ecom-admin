@@ -14,7 +14,9 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3
 
 type Schedule = {
   id: number;
-  product_id: number;
+  product_id: number | null;
+  special_product_id?: number | null;
+  product_type?: string | null;
   products?: { name?: string } | null;
   normal_price: number;
   scheduled_price: number;
@@ -39,6 +41,7 @@ const deriveStatus = (status: string, startAt: string, endAt: string) => {
 
 export default function PricingPage() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [specialProducts, setSpecialProducts] = useState<any[]>([]);
   const { toast } = useToast();
 
   const handleDelete = async (id: number) => {
@@ -75,6 +78,21 @@ export default function PricingPage() {
       }
     };
     fetchSchedules();
+  }, []);
+
+  useEffect(() => {
+    const fetchSpecialProducts = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/special-products`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setSpecialProducts(result.data);
+        }
+      } catch {
+        // keep UI stable on failure
+      }
+    };
+    fetchSpecialProducts();
   }, []);
 
   const counts = useMemo(() => {
@@ -177,9 +195,23 @@ export default function PricingPage() {
                   const discount = item.discount_percent !== null
                     ? `${Number(item.discount_percent).toFixed(0)}%`
                     : `${Math.round(((item.normal_price - item.scheduled_price) / item.normal_price) * 100)}%`;
+                  const isSpecial = String(item.product_type || '').toLowerCase() === 'special' || Boolean(item.special_product_id);
+                  const specialName = isSpecial
+                    ? specialProducts.find((p) => String(p.id) === String(item.special_product_id))?.name
+                    : null;
+                  const displayName = isSpecial
+                    ? (specialName || `Special Product #${item.special_product_id ?? ''}`.trim())
+                    : (item.products?.name || `Product #${item.product_id}`);
                   return (
                     <tr key={item.id} className="border-b border-border hover:bg-muted/30 transition">
-                      <td className="px-6 py-4 text-sm font-medium text-foreground">{item.products?.name || `Product #${item.product_id}`}</td>
+                      <td className="px-6 py-4 text-sm font-medium text-foreground">
+                        {displayName}
+                        {isSpecial && (
+                          <span className="ml-2 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                            Special
+                          </span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">{formatCurrency(item.normal_price)}</td>
                       <td className="px-6 py-4 text-sm font-semibold text-primary">{formatCurrency(item.scheduled_price)}</td>
                       <td className="px-6 py-4 text-sm text-foreground capitalize">{item.schedule_type.replace(/_/g, ' ')}</td>

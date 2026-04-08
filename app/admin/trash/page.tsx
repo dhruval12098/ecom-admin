@@ -22,6 +22,7 @@ type SectionKey =
   | 'hero'
   | 'products-main'
   | 'products-gallery'
+  | 'special-products-main'
   | 'categories'
   | 'subcategories'
   | 'about-story'
@@ -42,6 +43,7 @@ type SourceKey =
   | 'hero'
   | 'trends'
   | 'products'
+  | 'specialProducts'
   | 'productImages'
   | 'categories'
   | 'subcategories'
@@ -74,6 +76,12 @@ const trashSections: Array<{
     label: 'Products (Gallery)',
     prefix: 'products/gallery',
     sources: ['productImages']
+  },
+  {
+    key: 'special-products-main',
+    label: 'Special Products (Main)',
+    prefix: 'special-products/main',
+    sources: ['specialProducts']
   },
   {
     key: 'categories',
@@ -167,6 +175,10 @@ const sourceLoaders: Record<SourceKey, () => Promise<Set<string>>> = {
   },
   products: async () => {
     const data = await fetchJson(`${API_BASE_URL}/api/products`);
+    return loadUrlsFromData(data, ['image_url', 'imageUrl']);
+  },
+  specialProducts: async () => {
+    const data = await fetchJson(`${API_BASE_URL}/api/special-products`);
     return loadUrlsFromData(data, ['image_url', 'imageUrl']);
   },
   productImages: async () => {

@@ -33,7 +33,9 @@ export default function ShippingPage() {
   const [zoneDialogOpen, setZoneDialogOpen] = useState(false);
   const [zoneDraft, setZoneDraft] = useState<any>(emptyZone);
   const [categories, setCategories] = useState<any[]>([]);
+  const [specialCategories, setSpecialCategories] = useState<any[]>([]);
   const [excludedCategoryIds, setExcludedCategoryIds] = useState<number[]>([]);
+  const [excludedSpecialCategoryIds, setExcludedSpecialCategoryIds] = useState<number[]>([]);
   const [isSavingExclusions, setIsSavingExclusions] = useState(false);
   const [exclusionDialogOpen, setExclusionDialogOpen] = useState(false);
   const [exclusionSearch, setExclusionSearch] = useState('');
@@ -84,6 +86,21 @@ export default function ShippingPage() {
   }, []);
 
   useEffect(() => {
+    const loadSpecialCategories = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/special-categories`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setSpecialCategories(result.data);
+        }
+      } catch (e) {
+        // keep UI stable on failure
+      }
+    };
+    loadSpecialCategories();
+  }, []);
+
+  useEffect(() => {
     const loadSettings = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/api/settings`);
@@ -92,6 +109,9 @@ export default function ShippingPage() {
           const raw = result.data.excluded_free_shipping_category_ids || [];
           const parsed = Array.isArray(raw) ? raw : [];
           setExcludedCategoryIds(parsed.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id)));
+          const rawSpecial = result.data.excluded_free_shipping_special_category_ids || [];
+          const parsedSpecial = Array.isArray(rawSpecial) ? rawSpecial : [];
+          setExcludedSpecialCategoryIds(parsedSpecial.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id)));
           setScheduleEnabled(Boolean(result.data.delivery_schedule_enabled));
           const acceptRaw = Array.isArray(result.data.order_accept_days) ? result.data.order_accept_days : [];
           const deliveryRaw = Array.isArray(result.data.delivery_days) ? result.data.delivery_days : [];
@@ -175,6 +195,15 @@ export default function ShippingPage() {
     });
   };
 
+  const toggleExcludedSpecialCategory = (id: number) => {
+    setExcludedSpecialCategoryIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((cid) => cid !== id);
+      }
+      return [...prev, id];
+    });
+  };
+
   const saveExcludedCategories = async () => {
     try {
       setIsSavingExclusions(true);
@@ -182,7 +211,8 @@ export default function ShippingPage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          excluded_free_shipping_category_ids: excludedCategoryIds
+          excluded_free_shipping_category_ids: excludedCategoryIds,
+          excluded_free_shipping_special_category_ids: excludedSpecialCategoryIds
         })
       });
       const result = await response.json();
@@ -268,11 +298,22 @@ export default function ShippingPage() {
     return excludedCategoryIds.map((id) => map.get(Number(id)) || `Category #${id}`);
   }, [categories, excludedCategoryIds]);
 
+  const excludedSpecialCategoryNames = useMemo(() => {
+    const map = new Map(specialCategories.map((c) => [Number(c.id), c.name]));
+    return excludedSpecialCategoryIds.map((id) => map.get(Number(id)) || `Special Category #${id}`);
+  }, [specialCategories, excludedSpecialCategoryIds]);
+
   const filteredCategories = useMemo(() => {
     const q = exclusionSearch.trim().toLowerCase();
     if (!q) return categories;
     return categories.filter((c) => String(c.name || '').toLowerCase().includes(q));
   }, [categories, exclusionSearch]);
+
+  const filteredSpecialCategories = useMemo(() => {
+    const q = exclusionSearch.trim().toLowerCase();
+    if (!q) return specialCategories;
+    return specialCategories.filter((c) => String(c.name || '').toLowerCase().includes(q));
+  }, [specialCategories, exclusionSearch]);
 
   return (
     <AdminLayout>
@@ -348,12 +389,17 @@ export default function ShippingPage() {
             </div>
           </div>
           <Separator />
-          {excludedCategoryIds.length === 0 ? (
+          {excludedCategoryIds.length === 0 && excludedSpecialCategoryIds.length === 0 ? (
             <div className="text-sm text-muted-foreground">No excluded categories selected.</div>
           ) : (
             <div className="flex flex-wrap gap-2 text-sm">
               {excludedCategoryNames.map((name, index) => (
                 <span key={`${name}-${index}`} className="rounded-full border border-border bg-muted/40 px-3 py-1 text-muted-foreground">
+                  {name}
+                </span>
+              ))}
+              {excludedSpecialCategoryNames.map((name, index) => (
+                <span key={`special-${name}-${index}`} className="rounded-full border border-border bg-muted/40 px-3 py-1 text-muted-foreground">
                   {name}
                 </span>
               ))}
@@ -376,8 +422,11 @@ export default function ShippingPage() {
                 />
               </div>
               <div className="max-h-80 overflow-auto rounded-md border border-border">
+                <div className="px-4 py-2 text-xs font-semibold text-muted-foreground border-b border-border">
+                  Normal Categories
+                </div>
                 {filteredCategories.length === 0 ? (
-                  <div className="p-4 text-sm text-muted-foreground">No matching categories.</div>
+                  <div className="p-4 text-sm text-muted-foreground">No matching normal categories.</div>
                 ) : (
                   <div className="divide-y divide-border">
                     {filteredCategories.map((cat) => (
@@ -387,6 +436,26 @@ export default function ShippingPage() {
                           className="h-4 w-4 rounded border-border"
                           checked={excludedCategoryIds.includes(Number(cat.id))}
                           onChange={() => toggleExcludedCategory(Number(cat.id))}
+                        />
+                        <span className="text-foreground">{cat.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <div className="px-4 py-2 text-xs font-semibold text-muted-foreground border-y border-border">
+                  Special Categories
+                </div>
+                {filteredSpecialCategories.length === 0 ? (
+                  <div className="p-4 text-sm text-muted-foreground">No matching special categories.</div>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {filteredSpecialCategories.map((cat) => (
+                      <label key={`special-${cat.id}`} className="flex items-center gap-3 px-4 py-3 text-sm">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-border"
+                          checked={excludedSpecialCategoryIds.includes(Number(cat.id))}
+                          onChange={() => toggleExcludedSpecialCategory(Number(cat.id))}
                         />
                         <span className="text-foreground">{cat.name}</span>
                       </label>

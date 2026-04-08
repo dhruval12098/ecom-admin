@@ -30,12 +30,14 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3
 export default function AddPricingPage() {
   const router = useRouter();
   const [products, setProducts] = useState<any[]>([]);
+  const [specialProducts, setSpecialProducts] = useState<any[]>([]);
   const scheduleTypeOptions = [
     'discount_campaign',
     'festival_pricing',
     'happy_hour'
   ];
   const [form, setForm] = useState({
+    productType: 'normal',
     productId: '',
     variantId: '',
     normalPrice: '',
@@ -68,15 +70,46 @@ export default function AddPricingPage() {
   }, []);
 
   useEffect(() => {
+    const fetchSpecialProducts = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/special-products`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setSpecialProducts(result.data);
+        }
+      } catch {
+        // keep UI stable on failure
+      }
+    };
+    fetchSpecialProducts();
+  }, []);
+
+  useEffect(() => {
+    setForm((prev) => ({
+      ...prev,
+      productId: '',
+      variantId: '',
+      normalPrice: ''
+    }));
+    setVariants([]);
+  }, [form.productType]);
+
+  useEffect(() => {
     if (!form.productId) return;
-    const selected = products.find((p) => String(p.id) === String(form.productId));
+    const pool = form.productType === 'special' ? specialProducts : products;
+    const selected = pool.find((p) => String(p.id) === String(form.productId));
     if (selected && selected.price !== undefined && selected.price !== null) {
       setForm((prev) => ({ ...prev, normalPrice: String(selected.price) }));
     }
-  }, [form.productId, products]);
+  }, [form.productId, form.productType, products, specialProducts]);
 
   useEffect(() => {
     const loadVariants = async () => {
+      if (form.productType !== 'normal') {
+        setVariants([]);
+        setForm((prev) => ({ ...prev, variantId: '' }));
+        return;
+      }
       if (!form.productId) {
         setVariants([]);
         setForm((prev) => ({ ...prev, variantId: '' }));
@@ -98,7 +131,7 @@ export default function AddPricingPage() {
       }
     };
     loadVariants();
-  }, [form.productId]);
+  }, [form.productId, form.productType]);
 
   useEffect(() => {
     if (!form.variantId) return;
@@ -132,8 +165,10 @@ export default function AddPricingPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          productId: Number(form.productId),
-          variantId: form.variantId ? Number(form.variantId) : null,
+          productType: form.productType,
+          productId: form.productType === 'special' ? null : Number(form.productId),
+          specialProductId: form.productType === 'special' ? Number(form.productId) : null,
+          variantId: form.productType === 'special' ? null : (form.variantId ? Number(form.variantId) : null),
           normalPrice,
           scheduledPrice,
           discountPercent,
@@ -171,6 +206,21 @@ export default function AddPricingPage() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
+            <label className="block text-sm font-medium text-foreground mb-2">Product Type</label>
+            <Select
+              value={form.productType}
+              onValueChange={(value) => setForm((prev) => ({ ...prev, productType: value }))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select product type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="normal">Normal Product</SelectItem>
+                <SelectItem value="special">Special Product</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-foreground mb-2">Product</label>
             <Popover open={productOpen} onOpenChange={setProductOpen}>
               <PopoverTrigger asChild>
@@ -181,8 +231,10 @@ export default function AddPricingPage() {
                   className="w-full justify-between bg-background"
                 >
                   {form.productId
-                    ? products.find((p) => String(p.id) === String(form.productId))?.name
-                    : 'Select a product'}
+                    ? (form.productType === 'special'
+                      ? specialProducts.find((p) => String(p.id) === String(form.productId))?.name
+                      : products.find((p) => String(p.id) === String(form.productId))?.name)
+                    : form.productType === 'special' ? 'Select a special product' : 'Select a product'}
                   <ChevronsUpDown className="ml-2 h-4 w-4 opacity-60" />
                 </Button>
               </PopoverTrigger>
@@ -192,7 +244,7 @@ export default function AddPricingPage() {
                   <CommandList>
                     <CommandEmpty>No products found.</CommandEmpty>
                     <CommandGroup>
-                      {products.map((p) => (
+                      {(form.productType === 'special' ? specialProducts : products).map((p) => (
                         <CommandItem
                           key={p.id}
                           value={`${p.name ?? ''} ${p.id ?? ''}`}

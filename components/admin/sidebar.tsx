@@ -39,9 +39,19 @@ const navItems = [
     icon: Layers,
   },
   {
+    label: 'Special Categories',
+    href: '/admin/special-categories',
+    icon: Activity,
+  },
+  {
     label: 'Products',
     href: '/admin/products',
     icon: Package,
+  },
+  {
+    label: 'Special Products',
+    href: '/admin/special-products',
+    icon: ShoppingBasket,
   },
   {
     label: 'Orders',

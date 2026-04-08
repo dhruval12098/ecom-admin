@@ -23,12 +23,14 @@ export default function EditPricingPage() {
   const id = params.id as string;
 
   const [products, setProducts] = useState<any[]>([]);
+  const [specialProducts, setSpecialProducts] = useState<any[]>([]);
   const scheduleTypeOptions = [
     'discount_campaign',
     'festival_pricing',
     'happy_hour'
   ];
   const [form, setForm] = useState({
+    productType: 'normal',
     productId: '',
     variantId: '',
     normalPrice: '',
@@ -60,7 +62,27 @@ export default function EditPricingPage() {
   }, []);
 
   useEffect(() => {
+    const fetchSpecialProducts = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/special-products`);
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setSpecialProducts(result.data);
+        }
+      } catch {
+        // keep UI stable on failure
+      }
+    };
+    fetchSpecialProducts();
+  }, []);
+
+  useEffect(() => {
     const loadVariants = async () => {
+      if (form.productType !== 'normal') {
+        setVariants([]);
+        setForm((prev) => ({ ...prev, variantId: '' }));
+        return;
+      }
       if (!form.productId) {
         setVariants([]);
         setForm((prev) => ({ ...prev, variantId: '' }));
@@ -79,7 +101,7 @@ export default function EditPricingPage() {
       }
     };
     loadVariants();
-  }, [form.productId]);
+  }, [form.productId, form.productType]);
 
   useEffect(() => {
     if (!form.variantId) return;
@@ -98,9 +120,11 @@ export default function EditPricingPage() {
           const s = result.data;
           const existingType = s.schedule_type || 'discount_campaign';
           const isCustomType = !scheduleTypeOptions.includes(existingType);
+          const resolvedProductType = s.product_type || (s.special_product_id ? 'special' : 'normal');
           setForm({
-            productId: String(s.product_id),
-            variantId: s.variant_id ? String(s.variant_id) : '',
+            productType: resolvedProductType,
+            productId: String(resolvedProductType === 'special' ? s.special_product_id : s.product_id),
+            variantId: resolvedProductType === 'special' ? '' : (s.variant_id ? String(s.variant_id) : ''),
             normalPrice: String(s.normal_price || ''),
             scheduledPrice: String(s.scheduled_price || ''),
             scheduleType: existingType,
@@ -143,8 +167,10 @@ export default function EditPricingPage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          productId: Number(form.productId),
-          variantId: form.variantId ? Number(form.variantId) : null,
+          productType: form.productType,
+          productId: form.productType === 'special' ? null : Number(form.productId),
+          specialProductId: form.productType === 'special' ? Number(form.productId) : null,
+          variantId: form.productType === 'special' ? null : (form.variantId ? Number(form.variantId) : null),
           normalPrice,
           scheduledPrice,
           discountPercent,
@@ -182,6 +208,27 @@ export default function EditPricingPage() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
+            <label className="block text-sm font-medium text-foreground mb-2">Product Type</label>
+            <Select
+              value={form.productType}
+              onValueChange={(value) => setForm((prev) => ({
+                ...prev,
+                productType: value,
+                productId: '',
+                variantId: '',
+                normalPrice: ''
+              }))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a product type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="normal">Normal Product</SelectItem>
+                <SelectItem value="special">Special Product</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-foreground mb-2">Product</label>
             <Select
               value={form.productId}
@@ -191,7 +238,7 @@ export default function EditPricingPage() {
                 <SelectValue placeholder="Select a product" />
               </SelectTrigger>
               <SelectContent>
-                {products.map((p) => (
+                {(form.productType === 'special' ? specialProducts : products).map((p) => (
                   <SelectItem key={p.id} value={String(p.id)}>
                     {p.name}
                   </SelectItem>
