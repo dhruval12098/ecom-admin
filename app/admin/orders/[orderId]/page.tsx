@@ -103,7 +103,7 @@ export default function OrderDetailsPage() {
                 </tr>
               </thead>
               <tbody>
-                ${items.map((item) => `
+                ${items.map((item: any) => `
                   <tr>
                     <td>
                       <div>${item.product_name || '-'}</div>

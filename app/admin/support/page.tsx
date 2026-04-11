@@ -54,6 +54,7 @@ export default function SupportPage() {
   const [faqs, setFaqs] = useState<FaqItem[]>([]);
   const [loadingFaqs, setLoadingFaqs] = useState(true);
   const [faqFormOpen, setFaqFormOpen] = useState(false);
+  const [editingFaqId, setEditingFaqId] = useState<string | null>(null);
   const [faqForm, setFaqForm] = useState({
     question: '',
     answer: '',
@@ -82,6 +83,18 @@ export default function SupportPage() {
       status: 'published',
       sortOrder: '0',
     });
+    setEditingFaqId(null);
+  };
+
+  const openFaqEditor = (faq: FaqItem) => {
+    setEditingFaqId(faq.id);
+    setFaqForm({
+      question: faq.question || '',
+      answer: faq.answer || '',
+      status: faq.is_published ? 'published' : 'draft',
+      sortOrder: String(faq.sort_order ?? 0),
+    });
+    setFaqFormOpen(true);
   };
 
   const loadFaqs = async () => {
@@ -166,26 +179,29 @@ export default function SupportPage() {
         is_published: faqForm.status === 'published',
         sort_order: Number(faqForm.sortOrder) || 0,
       };
-      const response = await fetch(`${API_BASE_URL}/api/faqs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const response = await fetch(
+        editingFaqId ? `${API_BASE_URL}/api/faqs/${editingFaqId}` : `${API_BASE_URL}/api/faqs`,
+        {
+          method: editingFaqId ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
       if (!response.ok) {
-        throw new Error(`Failed to create FAQ (${response.status})`);
+        throw new Error(`Failed to ${editingFaqId ? 'update' : 'create'} FAQ (${response.status})`);
       }
       await loadFaqs();
       setFaqFormOpen(false);
       resetFaqForm();
       toast({
         title: 'Success',
-        description: 'FAQ added successfully.',
+        description: editingFaqId ? 'FAQ updated successfully.' : 'FAQ added successfully.',
       });
     } catch (error) {
-      console.error('Failed to create FAQ:', error);
+      console.error('Failed to save FAQ:', error);
       toast({
         title: 'Error',
-        description: 'Failed to add FAQ. Please try again.',
+        description: `Failed to ${editingFaqId ? 'update' : 'add'} FAQ. Please try again.`,
         variant: 'destructive',
       });
     }
@@ -338,14 +354,28 @@ export default function SupportPage() {
                     <CardTitle>FAQ</CardTitle>
                     <CardDescription>Maintain common answers for faster support.</CardDescription>
                   </div>
-                  <Dialog open={faqFormOpen} onOpenChange={setFaqFormOpen}>
+                  <Dialog
+                    open={faqFormOpen}
+                    onOpenChange={(open) => {
+                      setFaqFormOpen(open);
+                      if (!open) resetFaqForm();
+                    }}
+                  >
                     <DialogTrigger asChild>
-                      <Button>Add FAQ</Button>
+                      <Button
+                        onClick={() => {
+                          resetFaqForm();
+                        }}
+                      >
+                        Add FAQ
+                      </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-xl">
                       <DialogHeader>
-                        <DialogTitle>Add FAQ</DialogTitle>
-                        <DialogDescription>Create a new FAQ entry.</DialogDescription>
+                        <DialogTitle>{editingFaqId ? 'Edit FAQ' : 'Add FAQ'}</DialogTitle>
+                        <DialogDescription>
+                          {editingFaqId ? 'Update the existing FAQ entry.' : 'Create a new FAQ entry.'}
+                        </DialogDescription>
                       </DialogHeader>
                       <div className="grid gap-4">
                         <div className="grid gap-2">
@@ -403,7 +433,7 @@ export default function SupportPage() {
                             Cancel
                           </Button>
                           <Button onClick={handleCreateFaq} disabled={!isFaqFormValid}>
-                            Save FAQ
+                            {editingFaqId ? 'Update FAQ' : 'Save FAQ'}
                           </Button>
                         </div>
                       </div>
@@ -432,6 +462,11 @@ export default function SupportPage() {
                           </span>
                         </div>
                         <div className="text-sm text-muted-foreground mt-2">{faq.answer}</div>
+                        <div className="mt-3 flex items-center gap-2">
+                          <Button variant="outline" size="sm" onClick={() => openFaqEditor(faq)}>
+                            Edit
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>

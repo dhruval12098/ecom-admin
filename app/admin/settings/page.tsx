@@ -29,6 +29,8 @@ const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
     maintenanceEnabled: false,
     maintenanceMessage: 'We are performing scheduled maintenance. Please check back soon.',
     shippingNote: 'Standard delivery within 2-3 business days.',
+    homeHeroTextEnabled: false,
+    homeHeroH1Text: '',
   logoUrl: ''
 };
 
@@ -98,6 +100,8 @@ export default function SettingsPage() {
             maintenanceEnabled: Boolean(data.maintenance_enabled),
             maintenanceMessage: data.maintenance_message ?? initialForm.maintenanceMessage,
             shippingNote: data.shipping_note ?? initialForm.shippingNote,
+            homeHeroTextEnabled: Boolean(data.home_hero_text_enabled),
+            homeHeroH1Text: data.home_hero_h1_text ?? '',
             logoUrl: data.logo_url ?? ''
         };
         setForm(next);
@@ -136,6 +140,8 @@ export default function SettingsPage() {
         maintenance_enabled: nextForm.maintenanceEnabled,
         maintenance_message: nextForm.maintenanceMessage,
         shipping_note: nextForm.shippingNote,
+        home_hero_text_enabled: nextForm.homeHeroTextEnabled,
+        home_hero_h1_text: nextForm.homeHeroH1Text,
         logo_url: nextForm.logoUrl || null
       };
       const response = await fetch(`${API_BASE_URL}/api/settings`, {
@@ -159,6 +165,12 @@ export default function SettingsPage() {
       });
       return false;
     }
+  };
+
+  const handleHomeHeroToggle = async (checked: boolean) => {
+    const next = { ...form, homeHeroTextEnabled: checked };
+    setForm(next);
+    await handleSave(next);
   };
 
   const handleStoreInfoSave = async () => {
@@ -449,6 +461,39 @@ export default function SettingsPage() {
                   placeholder="Add delivery expectations or internal notes..."
                   disabled={isLoading}
                 />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Receipt className="h-5 w-5 text-primary" />
+                  Home Hero Text (H1)
+                </CardTitle>
+                <CardDescription>Optional headline shown above the homepage hero slider.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between rounded-lg border border-border p-4">
+                  <div>
+                    <p className="font-medium text-foreground">Show hero headline</p>
+                    <p className="text-sm text-muted-foreground">Toggles the H1 text on the homepage.</p>
+                  </div>
+                  <Switch
+                    checked={form.homeHeroTextEnabled}
+                    onCheckedChange={handleHomeHeroToggle}
+                    disabled={isLoading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Headline text</label>
+                  <Textarea
+                    value={form.homeHeroH1Text}
+                    onChange={(e) => handleChange('homeHeroH1Text', e.target.value)}
+                    rows={2}
+                    placeholder="Type the homepage headline..."
+                    disabled={isLoading || !form.homeHeroTextEnabled}
+                  />
+                </div>
               </CardContent>
             </Card>
 

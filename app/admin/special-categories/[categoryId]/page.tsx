@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { type ChangeEvent, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
 type SpecialCategory = {
   id: number;
@@ -22,6 +23,8 @@ type SpecialSubcategory = {
   id: number;
   name: string;
   description?: string | null;
+  image_url?: string | null;
+  imageUrl?: string | null;
   status?: string | null;
 };
 
@@ -33,13 +36,57 @@ export default function SpecialSubcategoriesPage() {
   const [subcategories, setSubcategories] = useState<SpecialSubcategory[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [newSub, setNewSub] = useState({ name: '', description: '', status: 'active' });
+  const [newSubImageUrl, setNewSubImageUrl] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editSub, setEditSub] = useState({ name: '', description: '', status: 'active' });
+  const [editSubImageUrl, setEditSubImageUrl] = useState('');
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SpecialSubcategory | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleImageUpload = async (
+    event: ChangeEvent<HTMLInputElement>,
+    mode: 'new' | 'edit'
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast({
+        title: 'File too large',
+        description: 'Please upload an image smaller than 2 MB.',
+        variant: 'destructive'
+      });
+      event.currentTarget.value = '';
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      formDataUpload.append('fileName', file.name);
+      formDataUpload.append('contentType', file.type);
+      const response = await fetch(`${API_BASE_URL}/api/special-subcategories/upload`, {
+        method: 'POST',
+        body: formDataUpload
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Upload failed');
+      if (mode === 'new') setNewSubImageUrl(result.data.publicUrl);
+      else setEditSubImageUrl(result.data.publicUrl);
+      toast({ title: 'Success', description: 'Image uploaded successfully.' });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Image upload failed.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchCategory = async () => {
@@ -93,6 +140,7 @@ export default function SpecialSubcategoriesPage() {
           categoryId: Number(categoryId),
           name: newSub.name,
           description: newSub.description || null,
+          imageUrl: newSubImageUrl || null,
           status: newSub.status || 'active'
         })
       });
@@ -100,6 +148,7 @@ export default function SpecialSubcategoriesPage() {
       if (!result.success) throw new Error(result.error || 'Create failed');
       setSubcategories((prev) => [...prev, result.data]);
       setNewSub({ name: '', description: '', status: 'active' });
+      setNewSubImageUrl('');
       setIsAdding(false);
       toast({ title: 'Success', description: 'Subcategory added.' });
     } catch {
@@ -120,6 +169,7 @@ export default function SpecialSubcategoriesPage() {
       description: sub.description || '',
       status: (sub.status || 'active').toLowerCase()
     });
+    setEditSubImageUrl(sub.image_url || sub.imageUrl || '');
     setIsEditOpen(true);
   };
 
@@ -142,6 +192,7 @@ export default function SpecialSubcategoriesPage() {
           categoryId: Number(categoryId),
           name: editSub.name,
           description: editSub.description || null,
+          imageUrl: editSubImageUrl || null,
           status: editSub.status || 'active'
         })
       });
@@ -152,6 +203,7 @@ export default function SpecialSubcategoriesPage() {
       );
       setIsEditOpen(false);
       setEditingId(null);
+      setEditSubImageUrl('');
       toast({ title: 'Success', description: 'Subcategory updated.' });
     } catch {
       toast({
@@ -220,6 +272,22 @@ export default function SpecialSubcategoriesPage() {
 
         {isAdding && (
           <Card className="p-6 space-y-4">
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-foreground">Subcategory Image</label>
+              <div className="rounded-lg border-2 border-dashed border-border p-5 text-center">
+                <Upload className="mx-auto mb-2 w-6 h-6 text-muted-foreground" />
+                <p className="text-sm font-medium text-foreground">Upload an image for this subcategory</p>
+                <p className="text-xs text-muted-foreground mt-1">Shown in the frontend nav and subcategory cards</p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload(e, 'new')}
+                  className="mt-3"
+                  disabled={isUploading}
+                />
+                {newSubImageUrl && <p className="text-xs text-muted-foreground mt-2">Image selected</p>}
+              </div>
+            </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Subcategory Name</label>
               <input
@@ -250,7 +318,7 @@ export default function SpecialSubcategoriesPage() {
               </select>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleAddSubcategory} disabled={isSaving}>
+              <Button onClick={handleAddSubcategory} disabled={isSaving || isUploading}>
                 {isSaving ? 'Saving...' : 'Save'}
               </Button>
               <Button variant="outline" onClick={() => setIsAdding(false)}>
@@ -266,6 +334,15 @@ export default function SpecialSubcategoriesPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold text-slate-900">{sub.name}</div>
+                  {(sub.image_url || sub.imageUrl) && (
+                    <div className="mt-2 h-24 w-full max-w-[180px] overflow-hidden rounded-md border border-slate-200">
+                      <img
+                        src={sub.image_url || sub.imageUrl || ''}
+                        alt={sub.name}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  )}
                   <div className="text-xs text-slate-500">{sub.description || 'No description'}</div>
                   <div className="text-xs text-slate-500 mt-1 capitalize">{sub.status || 'active'}</div>
                 </div>
@@ -299,6 +376,23 @@ export default function SpecialSubcategoriesPage() {
             <DialogTitle>Edit Subcategory</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-3">
+              <label className="block text-xs font-medium text-foreground">Subcategory Image</label>
+              <div className="rounded-lg border-2 border-dashed border-border p-4 text-center">
+                <Upload className="mx-auto mb-2 w-5 h-5 text-muted-foreground" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload(e, 'edit')}
+                  disabled={isUploading}
+                />
+                {editSubImageUrl && (
+                  <div className="mt-3 h-24 overflow-hidden rounded-md border border-border">
+                    <img src={editSubImageUrl} alt="Subcategory" className="h-full w-full object-cover" />
+                  </div>
+                )}
+              </div>
+            </div>
             <div>
               <label className="block text-xs font-medium text-foreground mb-2">Subcategory Name</label>
               <input
@@ -333,7 +427,7 @@ export default function SpecialSubcategoriesPage() {
             <Button variant="outline" onClick={() => setIsEditOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleEditSubcategory} disabled={isSaving}>
+            <Button onClick={handleEditSubcategory} disabled={isSaving || isUploading}>
               {isSaving ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>

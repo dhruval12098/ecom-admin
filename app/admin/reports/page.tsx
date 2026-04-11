@@ -21,6 +21,9 @@ export default function ReportsPage() {
   const [isReportLoading, setIsReportLoading] = useState(true);
   const [tab, setTab] = useState<ReportTab>('daily');
   const [bookkeepingTab, setBookkeepingTab] = useState<'daily' | 'monthly'>('daily');
+  const [dailyDate, setDailyDate] = useState<Date | undefined>(new Date());
+  const [dailyPage, setDailyPage] = useState(1);
+  const [dailyPageSize, setDailyPageSize] = useState(25);
   const [paymentsPage, setPaymentsPage] = useState(1);
   const [paymentsPageSize, setPaymentsPageSize] = useState(25);
   const allowedReportStatuses = useMemo(
@@ -54,6 +57,10 @@ export default function ReportsPage() {
   }, []);
 
   const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const dailyKey = useMemo(
+    () => (dailyDate ? format(dailyDate, 'yyyy-MM-dd') : todayKey),
+    [dailyDate, todayKey]
+  );
   const defaultMonthKey = useMemo(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -113,18 +120,18 @@ export default function ReportsPage() {
   useEffect(() => {
     if (tab === 'payments') return;
     if (tab === 'daily') {
-      fetchReportOrders(todayKey, todayKey, '');
+      fetchReportOrders(dailyKey, dailyKey, '');
       return;
     }
     if (tab === 'monthly') {
       const range = monthRange(monthlyKey || defaultMonthKey);
       fetchReportOrders(range.from, range.to, '');
-      return;
     }
-    if (tab === 'orders') {
-      fetchReportOrders(formatDateParam(ordersFrom), formatDateParam(ordersTo), ordersStatus);
-    }
-  }, [tab, monthlyKey, ordersFrom, ordersTo, ordersStatus, todayKey, defaultMonthKey]);
+  }, [tab, monthlyKey, ordersFrom, ordersTo, ordersStatus, dailyKey, defaultMonthKey]);
+
+  useEffect(() => {
+    setDailyPage(1);
+  }, [dailyKey, tab]);
 
   const filteredOrders = useMemo(() => {
     const fromDate = ordersFrom ? new Date(ordersFrom) : null;
@@ -207,6 +214,45 @@ export default function ReportsPage() {
       return allowedReportStatuses.has(status);
     });
   }, [orders, allowedReportStatuses]);
+
+  const dailySoldProducts = useMemo(() => {
+    return reportOrders.flatMap((order) => {
+      const items = Array.isArray(order.items) ? order.items : [];
+      return items.map((item: any, index: number) => {
+        const rateRaw = item.tax_percent;
+        const rate = rateRaw !== null && rateRaw !== undefined && rateRaw !== '' ? Number(rateRaw) : 0;
+        const unitPrice = Number(item.unit_price || 0);
+        const lineTotal = Number(item.total_price || 0);
+        const tax = Number.isFinite(rate) ? lineTotal * (rate / 100) : 0;
+        return {
+          id: `${order.id}-${item.id || index}`,
+          orderId: order.order_code || order.order_number || order.id || '',
+          customer: order.customer_name || '',
+          product: item.product_name || '',
+          variant: item.variant_name || '',
+          quantity: Number(item.quantity || 0),
+          unitPrice,
+          lineTotal,
+          taxRate: Number.isFinite(rate) ? rate : 0,
+          tax,
+          gross: lineTotal + tax,
+          date: order.created_at ? new Date(order.created_at).toISOString().slice(0, 10) : ''
+        };
+      });
+    });
+  }, [reportOrders]);
+
+  const dailyPageCount = useMemo(() => {
+    const size = Math.max(1, Number(dailyPageSize) || 25);
+    return Math.max(1, Math.ceil(dailySoldProducts.length / size));
+  }, [dailySoldProducts.length, dailyPageSize]);
+
+  const paginatedDailySoldProducts = useMemo(() => {
+    const size = Math.max(1, Number(dailyPageSize) || 25);
+    const safePage = Math.min(Math.max(1, dailyPage), dailyPageCount);
+    const start = (safePage - 1) * size;
+    return dailySoldProducts.slice(start, start + size);
+  }, [dailySoldProducts, dailyPage, dailyPageCount, dailyPageSize]);
 
   const buildVatBuckets = (items: any[]) => {
     const buckets: Record<number, number> = { 6: 0, 12: 0, 21: 0 };
@@ -379,6 +425,26 @@ export default function ReportsPage() {
     );
   };
 
+  const exportDailySoldProducts = (fileName: string) => {
+    downloadCsv(
+      fileName,
+      ['Order ID', 'Date', 'Customer', 'Product', 'Variant', 'Qty', 'Unit Price', 'Line Total', 'Tax Rate %', 'Tax', 'Gross'],
+      dailySoldProducts.map((row) => [
+        row.orderId,
+        row.date,
+        row.customer,
+        row.product,
+        row.variant,
+        row.quantity,
+        Number(row.unitPrice || 0).toFixed(2),
+        Number(row.lineTotal || 0).toFixed(2),
+        Number(row.taxRate || 0).toFixed(2),
+        Number(row.tax || 0).toFixed(2),
+        Number(row.gross || 0).toFixed(2)
+      ])
+    );
+  };
+
   const exportVatSummary = (fileName: string) => {
     downloadCsv(
       fileName,
@@ -545,19 +611,79 @@ export default function ReportsPage() {
         {tab === 'daily' && (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-3 justify-between">
+              <div className="flex flex-wrap items-center gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Date</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn('w-[180px] justify-start text-left font-normal', !dailyDate && 'text-muted-foreground')}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dailyDate ? format(dailyDate, 'PPP') : 'Pick a date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={dailyDate} onSelect={setDailyDate} initialFocus />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
               <div className="flex flex-wrap gap-2">
                 <Button
                   className="gap-2"
-                  onClick={() => exportSummaryRows(`daily-summary-${todayKey}.csv`, [buildSummaryRow(todayKey, reportOrders)])}
+                  onClick={() => exportSummaryRows(`daily-summary-${dailyKey}.csv`, [buildSummaryRow(dailyKey, reportOrders)])}
                   disabled={reportOrders.length === 0}
                 >
                   <Download className="w-4 h-4" />
                   Export Daily Summary CSV
                 </Button>
+                <Button
+                  className="gap-2"
+                  variant="outline"
+                  onClick={() => exportDailySoldProducts(`daily-sold-products-${dailyKey}.csv`)}
+                  disabled={dailySoldProducts.length === 0}
+                >
+                  <Download className="w-4 h-4" />
+                  Export Detailed CSV
+                </Button>
               </div>
             </div>
             <SummaryCards summary={summary} />
-            <OrderSummaryTable rows={[buildSummaryRow(todayKey, reportOrders)]} />
+            <OrderSummaryTable rows={[buildSummaryRow(dailyKey, reportOrders)]} />
+            <div className="flex items-center justify-between gap-3 flex-wrap text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span>Rows</span>
+                <select
+                  className="h-9 rounded-md bg-card border border-border px-2 text-sm text-foreground"
+                  value={dailyPageSize}
+                  onChange={(e) => setDailyPageSize(Number(e.target.value) || 25)}
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span>
+                  {dailySoldProducts.length === 0
+                    ? '0 results'
+                    : `${Math.min((dailyPage - 1) * dailyPageSize + 1, dailySoldProducts.length)}-${Math.min(dailyPage * dailyPageSize, dailySoldProducts.length)} of ${dailySoldProducts.length}`}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" disabled={dailyPage <= 1} onClick={() => setDailyPage((p) => Math.max(1, p - 1))}>
+                  Prev
+                </Button>
+                <span>
+                  Page {Math.min(Math.max(1, dailyPage), dailyPageCount)} of {dailyPageCount}
+                </span>
+                <Button variant="outline" size="sm" disabled={dailyPage >= dailyPageCount} onClick={() => setDailyPage((p) => Math.min(dailyPageCount, p + 1))}>
+                  Next
+                </Button>
+              </div>
+            </div>
+            <OrderDetailTable rows={paginatedDailySoldProducts} isLoading={isReportLoading} />
           </div>
         )}
 
