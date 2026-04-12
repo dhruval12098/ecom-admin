@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { slugify } from '@/lib/slugify';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
 type SpecialLabel = {
   name: string;
@@ -37,6 +38,34 @@ export default function AddSpecialCategoryPage() {
   const [labels, setLabels] = useState<SpecialLabel[]>([]);
   const [labelDraft, setLabelDraft] = useState({ ...emptyLabel });
   const [isSaving, setIsSaving] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const uploadImage = async (file: File) => {
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast({ title: 'File too large', description: 'Please upload an image smaller than 2 MB.', variant: 'destructive' });
+      return;
+    }
+    setIsUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('fileName', file.name);
+      formData.append('contentType', file.type);
+      const response = await fetch(`${API_BASE_URL}/api/special-products/upload-main`, {
+        method: 'POST',
+        body: formData
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Upload failed');
+      setImageUrl(result.data.publicUrl);
+      toast({ title: 'Success', description: 'Category image uploaded.' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error?.message || 'Image upload failed.', variant: 'destructive' });
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
 
   const handleChange = (field: keyof typeof form, value: string | boolean) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -67,6 +96,7 @@ export default function AddSpecialCategoryPage() {
         slug: slugify(form.name),
         description: form.description || null,
         pickup_address: form.pickup_address || null,
+        image_url: imageUrl || null,
         status: form.status || 'active'
       };
       const response = await fetch(`${API_BASE_URL}/api/special-categories`, {
@@ -150,6 +180,32 @@ export default function AddSpecialCategoryPage() {
               placeholder="Koningin Astridlaan 210, Gent"
               className="w-full px-4 py-2 rounded-md bg-background border border-border text-foreground"
             />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-foreground mb-2">Category Image</label>
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-border px-4 py-3 text-sm text-foreground hover:bg-muted/50">
+              <Upload className="h-4 w-4" />
+              {isUploadingImage ? 'Uploading...' : imageUrl ? 'Replace image' : 'Upload image'}
+              <input
+                type="file"
+                className="hidden"
+                accept="image/*"
+                disabled={isSaving || isUploadingImage}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadImage(file);
+                  e.currentTarget.value = '';
+                }}
+              />
+            </label>
+            {imageUrl && (
+              <div className="mt-3 flex items-center gap-3">
+                <img src={imageUrl} alt="Category preview" className="h-16 w-24 rounded-md border border-border object-cover" />
+                <button type="button" className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setImageUrl('')}>
+                  Remove image
+                </button>
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">Status</label>

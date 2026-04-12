@@ -24,6 +24,8 @@ type SpecialCategory = {
   name: string;
   slug: string;
   description?: string | null;
+  image_url?: string | null;
+  imageUrl?: string | null;
   pickup_only?: boolean | null;
   pickup_address?: string | null;
   status?: string | null;
@@ -119,6 +121,7 @@ export default function SpecialCategoriesPage() {
               <thead className="bg-muted/40 text-left">
                 <tr>
                   <th className="px-4 py-3 text-xs font-semibold text-foreground">Name</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-foreground">Image</th>
                   <th className="px-4 py-3 text-xs font-semibold text-foreground">Status</th>
                   <th className="px-4 py-3 text-xs font-semibold text-foreground">Pickup</th>
                   <th className="px-4 py-3 text-xs font-semibold text-foreground">Actions</th>
@@ -127,14 +130,14 @@ export default function SpecialCategoriesPage() {
               <tbody>
                 {isLoading && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-muted-foreground">
+                    <td colSpan={6} className="px-4 py-6 text-muted-foreground">
                       Loading...
                     </td>
                   </tr>
                 )}
                 {!isLoading && categories.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-muted-foreground">
+                    <td colSpan={6} className="px-4 py-6 text-muted-foreground">
                       No special categories yet.
                     </td>
                   </tr>
@@ -144,6 +147,17 @@ export default function SpecialCategoriesPage() {
                     <td className="px-4 py-3">
                       <div className="font-semibold text-foreground">{cat.name}</div>
                       <div className="text-xs text-muted-foreground">/{cat.slug}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {(cat.image_url || cat.imageUrl) ? (
+                        <img
+                          src={cat.image_url || cat.imageUrl || ''}
+                          alt={cat.name}
+                          className="h-12 w-16 rounded-md object-cover border border-border"
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">No image</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 capitalize">{cat.status || 'active'}</td>
                     <td className="px-4 py-3">{cat.pickup_address ? 'Pickup' : '—'}</td>

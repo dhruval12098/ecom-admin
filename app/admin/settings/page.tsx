@@ -21,7 +21,7 @@ const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
       storeName: 'Tulsi Indian Grocery Store',
       storeEmail: 'contact@tulsiindiangrocerystore.com',
     phone: '+91 98765 43210',
-      supportEmail: 'support@tulsiindiangrocerystore.com',
+    supportEmail: 'support@tulsiindiangrocerystore.com',
     address: '221B Baker Street, London',
     taxRate: '5',
     currency: 'EUR',
@@ -31,7 +31,12 @@ const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
     shippingNote: 'Standard delivery within 2-3 business days.',
     homeHeroTextEnabled: false,
     homeHeroH1Text: '',
-  logoUrl: ''
+    logoUrl: '',
+    smtpEmail: '',
+    smtpPassword: '',
+    smtpHost: '',
+    smtpPort: '',
+    smtpSecure: false
 };
 
 export default function SettingsPage() {
@@ -56,6 +61,7 @@ export default function SettingsPage() {
   const [pendingMaintenanceValue, setPendingMaintenanceValue] = useState<
     boolean | null
   >(null);
+  const [showSmtpDetails, setShowSmtpDetails] = useState(true);
   const isDirty = useMemo(
     () => JSON.stringify(form) !== JSON.stringify(initialValues),
     [form, initialValues]
@@ -102,7 +108,12 @@ export default function SettingsPage() {
             shippingNote: data.shipping_note ?? initialForm.shippingNote,
             homeHeroTextEnabled: Boolean(data.home_hero_text_enabled),
             homeHeroH1Text: data.home_hero_h1_text ?? '',
-            logoUrl: data.logo_url ?? ''
+            logoUrl: data.logo_url ?? '',
+            smtpEmail: data.smtp_email ?? '',
+            smtpPassword: data.smtp_password ?? '',
+            smtpHost: data.smtp_host ?? '',
+            smtpPort: data.smtp_port !== null && data.smtp_port !== undefined ? String(data.smtp_port) : '',
+            smtpSecure: Boolean(data.smtp_secure)
         };
         setForm(next);
         setInitialValues(next);
@@ -142,7 +153,12 @@ export default function SettingsPage() {
         shipping_note: nextForm.shippingNote,
         home_hero_text_enabled: nextForm.homeHeroTextEnabled,
         home_hero_h1_text: nextForm.homeHeroH1Text,
-        logo_url: nextForm.logoUrl || null
+        logo_url: nextForm.logoUrl || null,
+        smtp_email: nextForm.smtpEmail || null,
+        smtp_password: nextForm.smtpPassword || null,
+        smtp_host: nextForm.smtpHost || null,
+        smtp_port: nextForm.smtpPort ? Number(nextForm.smtpPort) : null,
+        smtp_secure: nextForm.smtpSecure
       };
       const response = await fetch(`${API_BASE_URL}/api/settings`, {
         method: 'PUT',
@@ -538,7 +554,7 @@ export default function SettingsPage() {
                 <CardTitle>Brand Assets</CardTitle>
                 <CardDescription>Upload logo or adjust brand mark.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+                <CardContent className="space-y-4">
                 <div className="flex items-center gap-4 rounded-lg border border-border p-4">
                   <div className="h-14 w-14 rounded-lg bg-primary text-primary-foreground flex items-center justify-center text-lg font-semibold overflow-hidden">
                     {form.logoUrl ? (
@@ -557,10 +573,82 @@ export default function SettingsPage() {
                   {isUploadingLogo ? 'Uploading...' : 'Upload new logo'}
                   <input type="file" className="hidden" accept="image/*" disabled={isLoading || isUploadingLogo} onChange={handleLogoUpload} />
                 </label>
-              </CardContent>
+                </CardContent>
+              </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Mail className="h-5 w-5 text-primary" />
+                      SMTP Settings
+                    </CardTitle>
+                    <CardDescription>Email delivery configuration for store notifications.</CardDescription>
+                  </div>
+                  <Button variant="outline" onClick={() => setShowSmtpDetails((prev) => !prev)}>
+                    {showSmtpDetails ? 'Hide' : 'Show'}
+                  </Button>
+                </div>
+              </CardHeader>
+              {showSmtpDetails && (
+                <CardContent className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">SMTP Email</label>
+                    <Input
+                      value={form.smtpEmail}
+                      onChange={(e) => handleChange('smtpEmail', e.target.value)}
+                      type="email"
+                      placeholder="info@tulsigrocery.be"
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">SMTP Password</label>
+                    <Input
+                      value={form.smtpPassword}
+                      onChange={(e) => handleChange('smtpPassword', e.target.value)}
+                      type="password"
+                      placeholder="••••••••"
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">SMTP Host</label>
+                    <Input
+                      value={form.smtpHost}
+                      onChange={(e) => handleChange('smtpHost', e.target.value)}
+                      placeholder="smtpout.secureserver.net"
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">SMTP Port</label>
+                      <Input
+                        value={form.smtpPort}
+                        onChange={(e) => handleChange('smtpPort', e.target.value)}
+                        type="number"
+                        placeholder="465"
+                        disabled={isLoading}
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <label className="flex items-center gap-3 rounded-md border border-border px-4 py-3 w-full">
+                        <Switch
+                          checked={Boolean(form.smtpSecure)}
+                          onCheckedChange={(checked) => handleChange('smtpSecure', checked)}
+                          disabled={isLoading}
+                        />
+                        <span className="text-sm font-medium text-foreground">Use secure SMTP (SSL/TLS)</span>
+                      </label>
+                    </div>
+                  </div>
+                </CardContent>
+              )}
             </Card>
 
-              <Card>
+            <Card>
                 <CardHeader className="flex flex-row items-start justify-between gap-4">
                   <div>
                     <CardTitle>Admin Access</CardTitle>
