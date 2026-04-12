@@ -2,15 +2,19 @@
 
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Upload } from 'lucide-react';
+import { ArrowLeft, CalendarIcon, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
@@ -30,7 +34,10 @@ type SpecialProduct = {
   label_id?: number | null;
   image_url?: string | null;
   preorder_only?: boolean | null;
+  order_start_date?: string | null;
+  order_end_date?: string | null;
   pickup_day?: string | null;
+  order_before_day?: string | null;
   pickup_time?: string | null;
   cutoff_time?: string | null;
   bulk_order_limit?: number | null;
@@ -59,6 +66,8 @@ export default function SpecialProductForm({
   const [categories] = useState<any[]>(initialCategories || []);
   const [subcategories, setSubcategories] = useState<any[]>(initialSubcategories || []);
   const [labels, setLabels] = useState<any[]>([]);
+  const [orderStartDate, setOrderStartDate] = useState<Date | undefined>(undefined);
+  const [orderEndDate, setOrderEndDate] = useState<Date | undefined>(undefined);
 
   const buildInitialState = useMemo(() => {
     return () => {
@@ -79,7 +88,10 @@ export default function SpecialProductForm({
           discountPercent: discountValue,
           labelId: initialProduct.label_id ? String(initialProduct.label_id) : '',
           preorderOnly: initialProduct.preorder_only ?? true,
+          orderStartDate: initialProduct.order_start_date || '',
+          orderEndDate: initialProduct.order_end_date || '',
           pickupDay: initialProduct.pickup_day || '',
+          orderBeforeDay: initialProduct.order_before_day || '',
           pickupTime: initialProduct.pickup_time || '',
           cutoffTime: initialProduct.cutoff_time || '',
           bulkOrderLimit:
@@ -99,7 +111,10 @@ export default function SpecialProductForm({
         discountPercent: '',
         labelId: '',
         preorderOnly: true,
+        orderStartDate: '',
+        orderEndDate: '',
         pickupDay: '',
+        orderBeforeDay: '',
         pickupTime: '',
         cutoffTime: '',
         bulkOrderLimit: '',
@@ -117,6 +132,13 @@ export default function SpecialProductForm({
     setFormData(buildInitialState());
     setPrimaryImage(initialProduct?.image_url || '');
   }, [buildInitialState, initialProduct]);
+
+  useEffect(() => {
+    if (mode === 'edit' && initialProduct) {
+      setOrderStartDate(initialProduct.order_start_date ? new Date(initialProduct.order_start_date) : undefined);
+      setOrderEndDate(initialProduct.order_end_date ? new Date(initialProduct.order_end_date) : undefined);
+    }
+  }, [mode, initialProduct]);
 
   useEffect(() => {
     setSubcategories(initialSubcategories || []);
@@ -249,7 +271,10 @@ export default function SpecialProductForm({
         labelId: formData.labelId ? Number(formData.labelId) : null,
         imageUrl: safeImage || null,
         preorder_only: formData.preorderOnly,
+        order_start_date: (formData as any).orderStartDate || null,
+        order_end_date: (formData as any).orderEndDate || null,
         pickup_day: (formData as any).pickupDay || null,
+        order_before_day: (formData as any).orderBeforeDay || null,
         pickup_time: (formData as any).pickupTime || null,
         cutoff_time: formData.cutoffTime || null,
         bulk_order_limit: formData.bulkOrderLimit ? Number(formData.bulkOrderLimit) : null,
@@ -455,44 +480,122 @@ export default function SpecialProductForm({
                   />
                 </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">Pickup Day</label>
-                      <Select
-                        value={(formData as any).pickupDay}
-                        onValueChange={(value) => setFormData((prev) => ({ ...prev, pickupDay: value } as any))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select pickup day" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {daysOfWeek.map((day) => (
-                            <SelectItem key={day} value={day}>
-                              {day}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">Order Start Date</label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                'w-full justify-start text-left font-normal',
+                                !orderStartDate && 'text-muted-foreground'
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {orderStartDate ? format(orderStartDate, 'PPP') : 'Pick a date'}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={orderStartDate}
+                              onSelect={(date) => {
+                                setOrderStartDate(date);
+                                setFormData((prev) => ({ ...prev, orderStartDate: date ? date.toISOString().slice(0, 10) : '' } as any));
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">Order End Date</label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                'w-full justify-start text-left font-normal',
+                                !orderEndDate && 'text-muted-foreground'
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {orderEndDate ? format(orderEndDate, 'PPP') : 'Pick a date'}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={orderEndDate}
+                              onSelect={(date) => {
+                                setOrderEndDate(date);
+                                setFormData((prev) => ({ ...prev, orderEndDate: date ? date.toISOString().slice(0, 10) : '' } as any));
+                              }}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">Pickup Time</label>
-                      <Input
-                        type="time"
-                        name="pickupTime"
-                        value={(formData as any).pickupTime}
-                        onChange={handleChange}
-                      />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">Pickup Day</label>
+                        <Select
+                          value={(formData as any).pickupDay}
+                          onValueChange={(value) => setFormData((prev) => ({ ...prev, pickupDay: value } as any))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select pickup day" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {daysOfWeek.map((day) => (
+                              <SelectItem key={day} value={day}>
+                                {day}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">Order Before Day</label>
+                        <Select
+                          value={(formData as any).orderBeforeDay}
+                          onValueChange={(value) => setFormData((prev) => ({ ...prev, orderBeforeDay: value } as any))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select order before day" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {daysOfWeek.map((day) => (
+                              <SelectItem key={day} value={day}>{day}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">Pickup Time</label>
+                        <Input
+                          type="time"
+                          name="pickupTime"
+                          value={(formData as any).pickupTime}
+                          onChange={handleChange}
+                        />
+                      </div>
                     </div>
-                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">Order By Time</label>
+                      <label className="block text-sm font-medium text-foreground mb-2">Order Deadline</label>
+                      <p className="mb-2 text-xs text-muted-foreground">
+                        This is the cutoff time customers must order before.
+                      </p>
                       <Input
                         type="time"
-                      name="cutoffTime"
-                      value={formData.cutoffTime}
-                      onChange={handleChange}
+                        name="cutoffTime"
+                        value={formData.cutoffTime}
+                        onChange={handleChange}
                     />
                   </div>
                   <div>
