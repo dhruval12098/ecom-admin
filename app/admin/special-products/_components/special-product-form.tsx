@@ -30,6 +30,8 @@ type SpecialProduct = {
   label_id?: number | null;
   image_url?: string | null;
   preorder_only?: boolean | null;
+  pickup_day?: string | null;
+  pickup_time?: string | null;
   cutoff_time?: string | null;
   bulk_order_limit?: number | null;
   available_days?: string[] | null;
@@ -77,6 +79,8 @@ export default function SpecialProductForm({
           discountPercent: discountValue,
           labelId: initialProduct.label_id ? String(initialProduct.label_id) : '',
           preorderOnly: initialProduct.preorder_only ?? true,
+          pickupDay: initialProduct.pickup_day || '',
+          pickupTime: initialProduct.pickup_time || '',
           cutoffTime: initialProduct.cutoff_time || '',
           bulkOrderLimit:
             initialProduct.bulk_order_limit !== null && initialProduct.bulk_order_limit !== undefined
@@ -95,6 +99,8 @@ export default function SpecialProductForm({
         discountPercent: '',
         labelId: '',
         preorderOnly: true,
+        pickupDay: '',
+        pickupTime: '',
         cutoffTime: '',
         bulkOrderLimit: '',
         availableDays: [] as string[],
@@ -243,6 +249,8 @@ export default function SpecialProductForm({
         labelId: formData.labelId ? Number(formData.labelId) : null,
         imageUrl: safeImage || null,
         preorder_only: formData.preorderOnly,
+        pickup_day: (formData as any).pickupDay || null,
+        pickup_time: (formData as any).pickupTime || null,
         cutoff_time: formData.cutoffTime || null,
         bulk_order_limit: formData.bulkOrderLimit ? Number(formData.bulkOrderLimit) : null,
         available_days: formData.availableDays.length ? formData.availableDays : null,
@@ -447,11 +455,41 @@ export default function SpecialProductForm({
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">Order By Time</label>
-                    <Input
-                      type="time"
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Pickup Day</label>
+                      <Select
+                        value={(formData as any).pickupDay}
+                        onValueChange={(value) => setFormData((prev) => ({ ...prev, pickupDay: value } as any))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select pickup day" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {daysOfWeek.map((day) => (
+                            <SelectItem key={day} value={day}>
+                              {day}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Pickup Time</label>
+                      <Input
+                        type="time"
+                        name="pickupTime"
+                        value={(formData as any).pickupTime}
+                        onChange={handleChange}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Order By Time</label>
+                      <Input
+                        type="time"
                       name="cutoffTime"
                       value={formData.cutoffTime}
                       onChange={handleChange}
