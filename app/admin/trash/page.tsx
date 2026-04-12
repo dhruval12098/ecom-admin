@@ -23,6 +23,8 @@ type SectionKey =
   | 'products-main'
   | 'products-gallery'
   | 'special-products-main'
+  | 'special-categories'
+  | 'special-subcategories'
   | 'categories'
   | 'subcategories'
   | 'about-story'
@@ -44,6 +46,8 @@ type SourceKey =
   | 'trends'
   | 'products'
   | 'specialProducts'
+  | 'specialCategories'
+  | 'specialSubcategories'
   | 'productImages'
   | 'categories'
   | 'subcategories'
@@ -82,6 +86,20 @@ const trashSections: Array<{
     label: 'Special Products (Main)',
     prefix: 'special-products/main',
     sources: ['specialProducts']
+  },
+  {
+    key: 'special-categories',
+    label: 'Special Categories',
+    prefix: 'special-categories',
+    sources: ['specialCategories'],
+    hint: 'Shows uploaded images used by special categories.'
+  },
+  {
+    key: 'special-subcategories',
+    label: 'Special Subcategories',
+    prefix: 'special-subcategories',
+    sources: ['specialSubcategories'],
+    hint: 'Shows uploaded images used by special subcategories.'
   },
   {
     key: 'categories',
@@ -179,6 +197,14 @@ const sourceLoaders: Record<SourceKey, () => Promise<Set<string>>> = {
   },
   specialProducts: async () => {
     const data = await fetchJson(`${API_BASE_URL}/api/special-products`);
+    return loadUrlsFromData(data, ['image_url', 'imageUrl']);
+  },
+  specialCategories: async () => {
+    const data = await fetchJson(`${API_BASE_URL}/api/special-categories`);
+    return loadUrlsFromData(data, ['image_url', 'imageUrl']);
+  },
+  specialSubcategories: async () => {
+    const data = await fetchJson(`${API_BASE_URL}/api/special-subcategories`);
     return loadUrlsFromData(data, ['image_url', 'imageUrl']);
   },
   productImages: async () => {

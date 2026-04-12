@@ -95,9 +95,10 @@ export default function EditSpecialCategoryPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('fileName', file.name);
+      formData.append('fileName', `${Date.now()}-${file.name}`);
       formData.append('contentType', file.type);
-      const response = await fetch(`${API_BASE_URL}/api/special-products/upload-main`, {
+      formData.append('folder', `special-categories/${id}`);
+      const response = await fetch(`${API_BASE_URL}/api/storage`, {
         method: 'POST',
         body: formData
       });
@@ -105,6 +106,20 @@ export default function EditSpecialCategoryPage() {
       if (!result.success) throw new Error(result.error || 'Upload failed');
       setImageUrl(result.data.publicUrl);
       toast({ title: 'Success', description: 'Category image uploaded.' });
+      const ok = await fetch(`${API_BASE_URL}/api/special-categories/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          slug: slugify(form.name),
+          description: form.description || null,
+          pickup_address: form.pickup_address || null,
+          image_url: result.data.publicUrl,
+          status: form.status || 'active'
+        })
+      });
+      const saved = await ok.json();
+      if (!saved.success) throw new Error(saved.error || 'Failed to save uploaded image');
     } catch (error: any) {
       toast({ title: 'Error', description: error?.message || 'Image upload failed.', variant: 'destructive' });
     } finally {

@@ -50,9 +50,10 @@ export default function AddSpecialCategoryPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('fileName', file.name);
+      formData.append('fileName', `${Date.now()}-${file.name}`);
       formData.append('contentType', file.type);
-      const response = await fetch(`${API_BASE_URL}/api/special-products/upload-main`, {
+      formData.append('folder', 'special-categories');
+      const response = await fetch(`${API_BASE_URL}/api/storage`, {
         method: 'POST',
         body: formData
       });
