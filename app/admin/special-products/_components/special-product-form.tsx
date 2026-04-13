@@ -19,7 +19,11 @@ import { cn } from '@/lib/utils';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
-const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const parseStoredDate = (value?: string | null) => {
+  if (!value) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};
 
 type SpecialProduct = {
   id: number;
@@ -41,7 +45,6 @@ type SpecialProduct = {
   pickup_time?: string | null;
   cutoff_time?: string | null;
   bulk_order_limit?: number | null;
-  available_days?: string[] | null;
   status?: string | null;
 };
 
@@ -68,6 +71,7 @@ export default function SpecialProductForm({
   const [labels, setLabels] = useState<any[]>([]);
   const [orderStartDate, setOrderStartDate] = useState<Date | undefined>(undefined);
   const [orderEndDate, setOrderEndDate] = useState<Date | undefined>(undefined);
+  const [pickupDate, setPickupDate] = useState<Date | undefined>(undefined);
 
   const buildInitialState = useMemo(() => {
     return () => {
@@ -90,15 +94,13 @@ export default function SpecialProductForm({
           preorderOnly: initialProduct.preorder_only ?? true,
           orderStartDate: initialProduct.order_start_date || '',
           orderEndDate: initialProduct.order_end_date || '',
-          pickupDay: initialProduct.pickup_day || '',
-          orderBeforeDay: initialProduct.order_before_day || '',
+          pickupDate: initialProduct.pickup_day || '',
           pickupTime: initialProduct.pickup_time || '',
           cutoffTime: initialProduct.cutoff_time || '',
           bulkOrderLimit:
             initialProduct.bulk_order_limit !== null && initialProduct.bulk_order_limit !== undefined
               ? String(initialProduct.bulk_order_limit)
               : '',
-          availableDays: Array.isArray(initialProduct.available_days) ? initialProduct.available_days : [],
           status: initialProduct.status || 'active'
         };
       }
@@ -113,12 +115,10 @@ export default function SpecialProductForm({
         preorderOnly: true,
         orderStartDate: '',
         orderEndDate: '',
-        pickupDay: '',
-        orderBeforeDay: '',
+        pickupDate: '',
         pickupTime: '',
         cutoffTime: '',
         bulkOrderLimit: '',
-        availableDays: [] as string[],
         status: 'active'
       };
     };
@@ -135,8 +135,9 @@ export default function SpecialProductForm({
 
   useEffect(() => {
     if (mode === 'edit' && initialProduct) {
-      setOrderStartDate(initialProduct.order_start_date ? new Date(initialProduct.order_start_date) : undefined);
-      setOrderEndDate(initialProduct.order_end_date ? new Date(initialProduct.order_end_date) : undefined);
+      setOrderStartDate(parseStoredDate(initialProduct.order_start_date));
+      setOrderEndDate(parseStoredDate(initialProduct.order_end_date));
+      setPickupDate(parseStoredDate(initialProduct.pickup_day));
     }
   }, [mode, initialProduct]);
 
@@ -191,14 +192,6 @@ export default function SpecialProductForm({
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
-  };
-
-  const toggleDay = (day: string) => {
-    setFormData((prev) => {
-      const exists = prev.availableDays.includes(day);
-      const next = exists ? prev.availableDays.filter((d) => d !== day) : [...prev.availableDays, day];
-      return { ...prev, availableDays: next };
-    });
   };
 
   const uploadMainImage = async (file: File) => {
@@ -273,12 +266,10 @@ export default function SpecialProductForm({
         preorder_only: formData.preorderOnly,
         order_start_date: (formData as any).orderStartDate || null,
         order_end_date: (formData as any).orderEndDate || null,
-        pickup_day: (formData as any).pickupDay || null,
-        order_before_day: (formData as any).orderBeforeDay || null,
+        pickup_day: (formData as any).pickupDate || null,
         pickup_time: (formData as any).pickupTime || null,
         cutoff_time: formData.cutoffTime || null,
         bulk_order_limit: formData.bulkOrderLimit ? Number(formData.bulkOrderLimit) : null,
-        available_days: formData.availableDays.length ? formData.availableDays : null,
         status: formData.status || 'active'
       };
       const url =
@@ -539,53 +530,47 @@ export default function SpecialProductForm({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Pickup Day</label>
-                        <Select
-                          value={(formData as any).pickupDay}
-                          onValueChange={(value) => setFormData((prev) => ({ ...prev, pickupDay: value } as any))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select pickup day" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {daysOfWeek.map((day) => (
-                              <SelectItem key={day} value={day}>
-                                {day}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Order Before Day</label>
-                        <Select
-                          value={(formData as any).orderBeforeDay}
-                          onValueChange={(value) => setFormData((prev) => ({ ...prev, orderBeforeDay: value } as any))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select order before day" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {daysOfWeek.map((day) => (
-                              <SelectItem key={day} value={day}>{day}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">Pickup Time</label>
-                        <Input
-                          type="time"
-                          name="pickupTime"
-                          value={(formData as any).pickupTime}
-                          onChange={handleChange}
-                        />
-                      </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Pickup Date</label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              'w-full justify-start text-left font-normal',
+                              !pickupDate && 'text-muted-foreground'
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {pickupDate ? format(pickupDate, 'PPP') : 'Pick a pickup date'}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={pickupDate}
+                            onSelect={(date) => {
+                              setPickupDate(date);
+                              setFormData((prev) => ({ ...prev, pickupDate: date ? date.toISOString().slice(0, 10) : '' } as any));
+                            }}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        This is the actual collection date customers will see on the product page.
+                      </p>
                     </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">Pickup Time</label>
+                      <Input
+                        type="time"
+                        name="pickupTime"
+                        value={(formData as any).pickupTime}
+                        onChange={handleChange}
+                      />
+                    </div>
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-2">Order Deadline</label>
                       <p className="mb-2 text-xs text-muted-foreground">
@@ -596,8 +581,10 @@ export default function SpecialProductForm({
                         name="cutoffTime"
                         value={formData.cutoffTime}
                         onChange={handleChange}
-                    />
+                      />
+                    </div>
                   </div>
+
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">Bulk Order Limit</label>
                     <Input
@@ -608,28 +595,8 @@ export default function SpecialProductForm({
                       placeholder="e.g., 10"
                     />
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Available Days</label>
-                  <div className="flex flex-wrap gap-2">
-                    {daysOfWeek.map((day) => (
-                      <button
-                        type="button"
-                        key={day}
-                        onClick={() => toggleDay(day)}
-                        className={`px-3 py-1.5 text-sm rounded-full border ${
-                          formData.availableDays.includes(day)
-                            ? 'bg-primary text-primary-foreground border-primary'
-                            : 'bg-background text-foreground border-border'
-                        }`}
-                      >
-                        {day}
-                      </button>
-                    ))}
-                  </div>
                 </div>
-              </div>
 
               <div className="bg-card border border-border rounded-xl p-6 space-y-4">
                 <h2 className="text-lg font-semibold text-foreground">Status</h2>
