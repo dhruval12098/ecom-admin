@@ -25,6 +25,14 @@ const parseStoredDate = (value?: string | null) => {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 };
 
+const formatDateForStorage = (value?: Date) => {
+  if (!value) return '';
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 type SpecialProduct = {
   id: number;
   name: string;
@@ -493,7 +501,7 @@ export default function SpecialProductForm({
                               selected={orderStartDate}
                               onSelect={(date) => {
                                 setOrderStartDate(date);
-                                setFormData((prev) => ({ ...prev, orderStartDate: date ? date.toISOString().slice(0, 10) : '' } as any));
+                                setFormData((prev) => ({ ...prev, orderStartDate: formatDateForStorage(date) } as any));
                               }}
                               initialFocus
                             />
@@ -521,7 +529,7 @@ export default function SpecialProductForm({
                               selected={orderEndDate}
                               onSelect={(date) => {
                                 setOrderEndDate(date);
-                                setFormData((prev) => ({ ...prev, orderEndDate: date ? date.toISOString().slice(0, 10) : '' } as any));
+                                setFormData((prev) => ({ ...prev, orderEndDate: formatDateForStorage(date) } as any));
                               }}
                               initialFocus
                             />
@@ -552,7 +560,7 @@ export default function SpecialProductForm({
                             selected={pickupDate}
                             onSelect={(date) => {
                               setPickupDate(date);
-                              setFormData((prev) => ({ ...prev, pickupDate: date ? date.toISOString().slice(0, 10) : '' } as any));
+                              setFormData((prev) => ({ ...prev, pickupDate: formatDateForStorage(date) } as any));
                             }}
                             initialFocus
                           />
