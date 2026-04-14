@@ -512,25 +512,56 @@ export default function OrderDetailsPage() {
                         ))}
                       </SelectContent>
                     </Select>
-                  <Button
-                    onClick={async () => {
-                      if (!orderId || pendingStatus === currentStatus) return;
-                      setIsSavingStatus(true);
-                      try {
-                        await fetch(`${API_BASE_URL}/api/orders/${orderId}/status`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ status: pendingStatus })
-                        });
-                        const normalized = normalizeStatus(pendingStatus);
-                        setCurrentStatus(normalized);
-                        setOrder((prev: any) => (prev ? { ...prev, status: normalized } : prev));
-                      } catch (e) {
-                        // keep UI stable on failure
-                      } finally {
-                        setIsSavingStatus(false);
-                      }
-                    }}
+                    <Button
+                      onClick={async () => {
+                        if (!orderId || pendingStatus === currentStatus) return;
+                        setIsSavingStatus(true);
+                        try {
+                          const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}/status`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: pendingStatus })
+                          });
+                          const result = await response.json().catch(() => null);
+                          if (!response.ok || !result?.success) {
+                            throw new Error(result?.error || result?.message || 'Failed to update order status');
+                          }
+                          const normalized = normalizeStatus(pendingStatus);
+                          setCurrentStatus(normalized);
+                          setOrder((prev: any) => (prev ? { ...prev, status: normalized } : prev));
+                          const emailDelivery = Array.isArray(result?.data?.email_delivery)
+                            ? result.data.email_delivery
+                            : [];
+                          if (emailDelivery.length > 0) {
+                            const summary = emailDelivery
+                              .map((entry: any) => {
+                                const label = String(entry?.type || 'email').replace(/_/g, ' ');
+                                const to = entry?.to ? ` to ${entry.to}` : '';
+                                if (entry?.sent) return `${label}: sent${to}`;
+                                if (entry?.skipped) return `${label}: skipped${to}${entry?.reason ? ` (${entry.reason})` : ''}`;
+                                return `${label}: failed${to}${entry?.reason ? ` (${entry.reason})` : ''}`;
+                              })
+                              .join(' | ');
+                            toast({
+                              title: 'Status updated',
+                              description: summary
+                            });
+                          } else {
+                            toast({
+                              title: 'Status updated',
+                              description: 'No email action was needed for this update.'
+                            });
+                          }
+                        } catch (e) {
+                          toast({
+                            title: 'Status update failed',
+                            description: e instanceof Error ? e.message : 'Please try again.',
+                            variant: 'destructive'
+                          });
+                        } finally {
+                          setIsSavingStatus(false);
+                        }
+                      }}
                     disabled={normalizeStatus(pendingStatus) === normalizeStatus(currentStatus) || isSavingStatus}
                   >
                     {isSavingStatus ? 'Saving...' : 'Save Status'}
