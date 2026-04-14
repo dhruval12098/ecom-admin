@@ -513,6 +513,7 @@ export default function OrderDetailsPage() {
                       </SelectContent>
                     </Select>
                     <Button
+                      title="Save order status"
                       onClick={async () => {
                         if (!orderId || pendingStatus === currentStatus) return;
                         setIsSavingStatus(true);
