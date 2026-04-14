@@ -537,6 +537,7 @@ export default function OrderDetailsPage() {
                               .map((entry: any) => {
                                 const label = String(entry?.type || 'email').replace(/_/g, ' ');
                                 const to = entry?.to ? ` to ${entry.to}` : '';
+                                if (entry?.queued) return `${label}: queued${to}${entry?.job_id ? ` (#${entry.job_id})` : ''}`;
                                 if (entry?.sent) return `${label}: sent${to}`;
                                 if (entry?.skipped) return `${label}: skipped${to}${entry?.reason ? ` (${entry.reason})` : ''}`;
                                 return `${label}: failed${to}${entry?.reason ? ` (${entry.reason})` : ''}`;
