@@ -62,6 +62,8 @@ export default function SettingsPage() {
     boolean | null
   >(null);
   const [showSmtpDetails, setShowSmtpDetails] = useState(true);
+  const [isSavingSmtp, setIsSavingSmtp] = useState(false);
+  const [isTestingSmtp, setIsTestingSmtp] = useState(false);
   const isDirty = useMemo(
     () => JSON.stringify(form) !== JSON.stringify(initialValues),
     [form, initialValues]
@@ -180,6 +182,79 @@ export default function SettingsPage() {
         variant: 'destructive'
       });
       return false;
+    }
+  };
+
+  const handleSmtpSave = async () => {
+    try {
+      setIsSavingSmtp(true);
+      const payload = {
+        smtp_email: form.smtpEmail || null,
+        smtp_password: form.smtpPassword || null,
+        smtp_host: form.smtpHost || null,
+        smtp_port: form.smtpPort ? Number(form.smtpPort) : null,
+        smtp_secure: form.smtpSecure
+      };
+      const response = await fetch(`${API_BASE_URL}/api/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'SMTP save failed');
+      setInitialValues((prev) => ({
+        ...prev,
+        smtpEmail: form.smtpEmail,
+        smtpPassword: form.smtpPassword,
+        smtpHost: form.smtpHost,
+        smtpPort: form.smtpPort,
+        smtpSecure: form.smtpSecure
+      }));
+      toast({
+        title: 'SMTP saved',
+        description: 'SMTP settings were saved successfully.'
+      });
+    } catch (error: any) {
+      toast({
+        title: 'SMTP save failed',
+        description: error?.message || 'Please try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSavingSmtp(false);
+    }
+  };
+
+  const handleSmtpTest = async () => {
+    try {
+      setIsTestingSmtp(true);
+      const payload = {
+        smtp_email: form.smtpEmail || null,
+        smtp_password: form.smtpPassword || null,
+        smtp_host: form.smtpHost || null,
+        smtp_port: form.smtpPort ? Number(form.smtpPort) : null,
+        smtp_secure: form.smtpSecure,
+        to_email: form.supportEmail || form.smtpEmail || null
+      };
+      const response = await fetch(`${API_BASE_URL}/api/settings/test-smtp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'SMTP test failed');
+      toast({
+        title: 'Test email sent',
+        description: `SMTP test email sent to ${result?.data?.to || payload.to_email}.`
+      });
+    } catch (error: any) {
+      toast({
+        title: 'SMTP test failed',
+        description: error?.message || 'Please verify host, port, and credentials.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsTestingSmtp(false);
     }
   };
 
@@ -643,6 +718,14 @@ export default function SettingsPage() {
                         <span className="text-sm font-medium text-foreground">Use secure SMTP (SSL/TLS)</span>
                       </label>
                     </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                    <Button onClick={handleSmtpSave} disabled={isLoading || isSavingSmtp || isTestingSmtp}>
+                      {isSavingSmtp ? 'Saving SMTP...' : 'Save SMTP'}
+                    </Button>
+                    <Button variant="outline" onClick={handleSmtpTest} disabled={isLoading || isSavingSmtp || isTestingSmtp}>
+                      {isTestingSmtp ? 'Sending Test...' : 'Test SMTP'}
+                    </Button>
                   </div>
                 </CardContent>
               )}
