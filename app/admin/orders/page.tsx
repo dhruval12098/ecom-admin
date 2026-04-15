@@ -34,6 +34,12 @@ export default function OrdersPage() {
   const { toast } = useToast();
 
   useEffect(() => {
+    const key = 'adminOrdersLastSeenAt';
+    localStorage.setItem(key, String(Date.now()));
+    window.dispatchEvent(new Event('admin-orders-seen-updated'));
+  }, []);
+
+  useEffect(() => {
     const fetchOrders = async () => {
       try {
         setIsLoadingOrders(true);

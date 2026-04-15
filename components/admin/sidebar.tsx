@@ -25,7 +25,7 @@ import {
   Star
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const navItems = [
   {
@@ -133,6 +133,7 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const navRef = useRef<HTMLElement>(null);
+  const [unreadOrdersCount, setUnreadOrdersCount] = useState(0);
 
   useEffect(() => {
     const key = 'adminSidebarScrollTop';
@@ -149,6 +150,46 @@ export function Sidebar() {
     el.addEventListener('scroll', handleScroll, { passive: true });
     return () => el.removeEventListener('scroll', handleScroll);
   }, [pathname]);
+
+  useEffect(() => {
+    const LAST_SEEN_KEY = 'adminOrdersLastSeenAt';
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const refreshUnreadOrders = async () => {
+      try {
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
+        const response = await fetch(`${API_BASE_URL}/api/orders`, {
+          cache: 'no-store',
+          headers: { 'ngrok-skip-browser-warning': 'true' }
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok || !result?.success || !Array.isArray(result?.data)) {
+          return;
+        }
+        const lastSeenAt = Number(localStorage.getItem(LAST_SEEN_KEY) || 0);
+        const unseen = result.data.filter((order: any) => {
+          const createdAt = order?.created_at ? new Date(order.created_at).getTime() : 0;
+          return createdAt > lastSeenAt;
+        });
+        setUnreadOrdersCount(unseen.length);
+      } catch {
+        // keep badge stable on transient fetch issues
+      }
+    };
+
+    refreshUnreadOrders();
+    intervalId = setInterval(refreshUnreadOrders, 30000);
+
+    const handleSeenUpdate = () => {
+      refreshUnreadOrders();
+    };
+    window.addEventListener('admin-orders-seen-updated', handleSeenUpdate);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      window.removeEventListener('admin-orders-seen-updated', handleSeenUpdate);
+    };
+  }, []);
 
   return (
       <aside
@@ -190,6 +231,11 @@ export function Sidebar() {
               >
                 <Icon className="admin-sidebar-icon w-3.5 h-3.5" />
                 <span className="admin-sidebar-label">{item.label}</span>
+                {item.href === '/admin/orders' && unreadOrdersCount > 0 && (
+                  <span className="ml-auto min-w-5 h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center">
+                    {unreadOrdersCount > 99 ? '99+' : unreadOrdersCount}
+                  </span>
+                )}
               </Link>
             );
           })}
