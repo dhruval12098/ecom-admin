@@ -46,6 +46,7 @@ export default function CategoryDetailsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Subcategory | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSavingSub, setIsSavingSub] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -163,6 +164,7 @@ export default function CategoryDetailsPage() {
   };
 
   const handleAddSubcategory = async () => {
+    if (isSavingSub) return;
     if (!newSub.name.trim()) {
       toast({
         title: 'Error',
@@ -172,6 +174,7 @@ export default function CategoryDetailsPage() {
       return;
     }
     const slug = slugify(newSub.slug || newSub.name);
+    setIsSavingSub(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/subcategories`, {
         method: 'POST',
@@ -201,6 +204,8 @@ export default function CategoryDetailsPage() {
         description: 'Failed to add subcategory.',
         variant: 'destructive',
       });
+    } finally {
+      setIsSavingSub(false);
     }
   };
 
@@ -354,8 +359,10 @@ export default function CategoryDetailsPage() {
               )}
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleAddSubcategory}>Save</Button>
-              <Button variant="outline" onClick={() => setIsAdding(false)}>Cancel</Button>
+              <Button onClick={handleAddSubcategory} disabled={isSavingSub || isUploading}>
+                {isSavingSub ? 'Saving...' : 'Save'}
+              </Button>
+              <Button variant="outline" onClick={() => setIsAdding(false)} disabled={isSavingSub}>Cancel</Button>
             </div>
           </Card>
         )}

@@ -535,6 +535,20 @@ export default function ReportsPage() {
     );
   };
 
+  const dailyOrderDetailRows = useMemo(() => buildOrderReportRows(reportOrders), [reportOrders, paymentByOrder]);
+
+  const dailyOrderDetailPageCount = useMemo(() => {
+    const size = Math.max(1, Number(dailyPageSize) || 25);
+    return Math.max(1, Math.ceil(dailyOrderDetailRows.length / size));
+  }, [dailyOrderDetailRows.length, dailyPageSize]);
+
+  const paginatedDailyOrderDetailRows = useMemo(() => {
+    const size = Math.max(1, Number(dailyPageSize) || 25);
+    const safePage = Math.min(Math.max(1, dailyPage), dailyOrderDetailPageCount);
+    const start = (safePage - 1) * size;
+    return dailyOrderDetailRows.slice(start, start + size);
+  }, [dailyOrderDetailRows, dailyPage, dailyOrderDetailPageCount, dailyPageSize]);
+
   const buildVatTotals = (rows: any[]) => {
     const buckets: Record<number, number> = { 6: 0, 12: 0, 21: 0 };
     rows.forEach((order) => {
@@ -666,9 +680,9 @@ export default function ReportsPage() {
                   <option value={100}>100</option>
                 </select>
                 <span>
-                  {dailySoldProducts.length === 0
+                  {dailyOrderDetailRows.length === 0
                     ? '0 results'
-                    : `${Math.min((dailyPage - 1) * dailyPageSize + 1, dailySoldProducts.length)}-${Math.min(dailyPage * dailyPageSize, dailySoldProducts.length)} of ${dailySoldProducts.length}`}
+                    : `${Math.min((dailyPage - 1) * dailyPageSize + 1, dailyOrderDetailRows.length)}-${Math.min(dailyPage * dailyPageSize, dailyOrderDetailRows.length)} of ${dailyOrderDetailRows.length}`}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -676,14 +690,14 @@ export default function ReportsPage() {
                   Prev
                 </Button>
                 <span>
-                  Page {Math.min(Math.max(1, dailyPage), dailyPageCount)} of {dailyPageCount}
+                  Page {Math.min(Math.max(1, dailyPage), dailyOrderDetailPageCount)} of {dailyOrderDetailPageCount}
                 </span>
-                <Button variant="outline" size="sm" disabled={dailyPage >= dailyPageCount} onClick={() => setDailyPage((p) => Math.min(dailyPageCount, p + 1))}>
+                <Button variant="outline" size="sm" disabled={dailyPage >= dailyOrderDetailPageCount} onClick={() => setDailyPage((p) => Math.min(dailyOrderDetailPageCount, p + 1))}>
                   Next
                 </Button>
               </div>
             </div>
-            <OrderDetailTable rows={paginatedDailySoldProducts} isLoading={isReportLoading} />
+            <OrderDetailTable rows={paginatedDailyOrderDetailRows} isLoading={isReportLoading} />
           </div>
         )}
 
