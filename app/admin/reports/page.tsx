@@ -3,7 +3,7 @@
 import { AdminLayout } from '@/components/admin/admin-layout';
 import { Button } from '@/components/ui/button';
 import { CalendarIcon, Download } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatCurrency } from '@/lib/currency';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -41,20 +41,31 @@ export default function ReportsPage() {
   const [monthlyFrom, setMonthlyFrom] = useState('');
   const [monthlyTo, setMonthlyTo] = useState('');
 
-  useEffect(() => {
-    const fetchPayments = async () => {
-      try {
-        const paymentsResponse = await fetch(`${API_BASE_URL}/api/payments`);
-        const paymentsResult = await paymentsResponse.json();
-        if (paymentsResult.success && Array.isArray(paymentsResult.data)) {
-          setPayments(paymentsResult.data);
-        }
-      } finally {
-        setIsLoading(false);
+  const fetchPayments = useCallback(async () => {
+    try {
+      const paymentsResponse = await fetch(`${API_BASE_URL}/api/payments`);
+      const paymentsResult = await paymentsResponse.json();
+      if (paymentsResult.success && Array.isArray(paymentsResult.data)) {
+        setPayments(paymentsResult.data);
+      } else {
+        setPayments([]);
       }
-    };
-    fetchPayments();
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchPayments();
+  }, [fetchPayments]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      fetchPayments();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [fetchPayments]);
 
   const todayKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const dailyKey = useMemo(
@@ -69,6 +80,12 @@ export default function ReportsPage() {
   useEffect(() => {
     if (!monthlyKey) setMonthlyKey(defaultMonthKey);
   }, [defaultMonthKey, monthlyKey]);
+
+  useEffect(() => {
+    if (tab === 'payments' || tab === 'daily' || tab === 'monthly' || tab === 'bookkeeping') {
+      fetchPayments();
+    }
+  }, [tab, dailyKey, monthlyKey, fetchPayments]);
 
   const monthRange = (key: string) => {
     if (!key) return { from: '', to: '' };

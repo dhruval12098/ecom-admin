@@ -160,6 +160,7 @@ export default function OrderDetailsPage() {
   const [isDownloadingInvoice, setIsDownloadingInvoice] = useState(false);
   const [isSyncingPayment, setIsSyncingPayment] = useState(false);
   const [isRefunding, setIsRefunding] = useState(false);
+  const [isMarkingCodPaid, setIsMarkingCodPaid] = useState(false);
   const [downloadSeconds, setDownloadSeconds] = useState(0);
   const { toast } = useToast();
   const statusTone: Record<string, string> = {
@@ -201,6 +202,11 @@ export default function OrderDetailsPage() {
     }
     if (value === 'WORLDLINE') return { gateway: 'Worldline', detail: '-' };
     return { gateway: value, detail: '-' };
+  };
+
+  const isCodPaymentMethod = (raw: string | null | undefined) => {
+    const value = String(raw || '').trim().toLowerCase();
+    return value === 'cod' || value.includes('cash') || value.includes('cash on delivery');
   };
 
   const fetchOrder = async () => {
@@ -311,6 +317,50 @@ export default function OrderDetailsPage() {
       }
     };
 
+  const handleMarkCodPaid = async () => {
+    if (!orderId) return;
+    try {
+      setIsMarkingCodPaid(true);
+      const response = await fetch(`${API_BASE_URL}/api/payments/${orderId}/mark-paid-cod`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        }
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || result?.message || 'Failed to mark COD as paid');
+      }
+
+      setOrder((prev: any) => {
+        if (!prev) return prev;
+        const payments = Array.isArray(prev.payments) ? [...prev.payments] : [];
+        if (payments[0]) {
+          payments[0] = { ...payments[0], status: 'paid' };
+        }
+        return { ...prev, payments };
+      });
+
+      toast({
+        title: 'COD payment updated',
+        description: 'Payment status set to Paid.'
+      });
+    } catch (e) {
+      toast({
+        title: 'Update failed',
+        description: e instanceof Error ? e.message : 'Please try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsMarkingCodPaid(false);
+    }
+  };
+
+  const currentPaymentMethod = order?.payments?.[0]?.method || order?.payment_method || order?.paymentMethod;
+  const isCodOrder = isCodPaymentMethod(currentPaymentMethod);
+  const isPaymentAlreadyPaid = String(order?.payments?.[0]?.status || '').toLowerCase() === 'paid';
+
 
   return (
     <AdminLayout>
@@ -340,6 +390,22 @@ export default function OrderDetailsPage() {
               <Button variant="outline" className="gap-2" onClick={handleSyncPayment} disabled={isSyncingPayment}>
                 {isSyncingPayment ? 'Syncing Payment...' : 'Sync Payment Status'}
               </Button>
+              {isCodOrder && (
+                <ConfirmDialog
+                  title="Mark COD as paid?"
+                  description="Use this only after cash is collected. This action marks the payment status as Paid."
+                  confirmText={isMarkingCodPaid ? 'Updating...' : 'Yes, mark paid'}
+                  cancelText="Cancel"
+                  disabled={isMarkingCodPaid || isPaymentAlreadyPaid}
+                  onConfirm={handleMarkCodPaid}
+                  trigger={(
+                    <Button variant="outline" className="gap-2" disabled={isMarkingCodPaid || isPaymentAlreadyPaid}>
+                      {isMarkingCodPaid ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      {isPaymentAlreadyPaid ? 'COD Already Paid' : 'Mark COD as Paid'}
+                    </Button>
+                  )}
+                />
+              )}
               <ConfirmDialog
                 title="Refund this payment?"
                 description="This will issue a full refund in Worldline and mark the order as cancelled. This action cannot be undone."
