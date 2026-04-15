@@ -134,6 +134,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const navRef = useRef<HTMLElement>(null);
   const [unreadOrdersCount, setUnreadOrdersCount] = useState(0);
+  const LAST_SEEN_KEY = 'adminOrdersLastSeenAt';
 
   useEffect(() => {
     const key = 'adminSidebarScrollTop';
@@ -152,11 +153,23 @@ export function Sidebar() {
   }, [pathname]);
 
   useEffect(() => {
-    const LAST_SEEN_KEY = 'adminOrdersLastSeenAt';
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const refreshUnreadOrders = async () => {
       try {
+        const storedLastSeen = localStorage.getItem(LAST_SEEN_KEY);
+        if (!storedLastSeen) {
+          localStorage.setItem(LAST_SEEN_KEY, String(Date.now()));
+          setUnreadOrdersCount(0);
+          return;
+        }
+        const lastSeenAt = Number(storedLastSeen);
+        if (!Number.isFinite(lastSeenAt) || lastSeenAt <= 0) {
+          localStorage.setItem(LAST_SEEN_KEY, String(Date.now()));
+          setUnreadOrdersCount(0);
+          return;
+        }
+
         const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001';
         const response = await fetch(`${API_BASE_URL}/api/orders`, {
           cache: 'no-store',
@@ -166,9 +179,9 @@ export function Sidebar() {
         if (!response.ok || !result?.success || !Array.isArray(result?.data)) {
           return;
         }
-        const lastSeenAt = Number(localStorage.getItem(LAST_SEEN_KEY) || 0);
         const unseen = result.data.filter((order: any) => {
-          const createdAt = order?.created_at ? new Date(order.created_at).getTime() : 0;
+          const createdAtRaw = order?.created_at || order?.createdAt;
+          const createdAt = createdAtRaw ? new Date(createdAtRaw).getTime() : 0;
           return createdAt > lastSeenAt;
         });
         setUnreadOrdersCount(unseen.length);
@@ -183,13 +196,31 @@ export function Sidebar() {
     const handleSeenUpdate = () => {
       refreshUnreadOrders();
     };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === LAST_SEEN_KEY) {
+        refreshUnreadOrders();
+      }
+    };
+    const handleWindowFocus = () => {
+      refreshUnreadOrders();
+    };
+    const handleVisibilityChange = () => {
+      if (!document.hidden) refreshUnreadOrders();
+    };
+
     window.addEventListener('admin-orders-seen-updated', handleSeenUpdate);
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       if (intervalId) clearInterval(intervalId);
       window.removeEventListener('admin-orders-seen-updated', handleSeenUpdate);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [LAST_SEEN_KEY, pathname]);
 
   return (
       <aside
